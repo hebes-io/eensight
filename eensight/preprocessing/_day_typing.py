@@ -9,17 +9,15 @@ import stumpy
 import numpy as np 
 import pandas as pd 
 
-from collections import defaultdict
-from adtk.detector import InterQuartileRangeAD 
-from scipy.interpolate import UnivariateSpline
-from sklearn.preprocessing import MinMaxScaler
-from datetime import date, time, datetime, timedelta
-from sklearn.metrics.pairwise import cosine_similarity
+from metric_learn import MMC
+from sklearn.metrics import f1_score
+from datetime import date, datetime, timedelta
+from sklearn.model_selection import train_test_split
+from sklearn.metrics.pairwise import euclidean_distances
 
 
 
-
-def get_matrix_profile(X, window=24):
+def get_matrix_profile(X: pd.Series, window=24) -> pd.DataFrame:
     time_step = X.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
 
@@ -28,147 +26,150 @@ def get_matrix_profile(X, window=24):
 
     profile = pd.DataFrame(data=mp[:, :2], index=X.index[:-m+1], columns=['nnd', 'nnidx'])
     profile['idx']   = profile.reset_index().index.astype(np.int32)
-    profile['nnd']   = profile['nnd'].astype(np.float)
+    profile['nnd']   = profile['nnd'].astype(float)
     profile['nnidx'] = profile['nnidx'].astype(np.int32)
     return profile # matrix profile
 
 
-def find_discord_days(profile, c=3):
-    profile = profile[profile.index.time == time(0, 0)]
-    ad = InterQuartileRangeAD(c=c)
-    return ad.fit_detect(profile['nnd']) #discords
+def maximum_mean_discrepancy(data):
+    Kyy = euclidean_distances(data)
+    ny = data.shape[0]
+    data_term = (np.sum(Kyy) - np.trace(Kyy)) / (ny * (ny-1))
+    
+    def calculate_mmd(prototypes):
+        nx = prototypes.shape[0]
+        Kxx = euclidean_distances(prototypes)
+        Kxy = euclidean_distances(prototypes, data)
+
+        t1 = (1./(nx*(nx-1))) * (np.sum(Kxx) - np.trace(Kxx))
+        t2 = (2./(nx*ny)) * np.sum(Kxy)
+        mmd2 = (t1 - t2 + data_term)
+        return mmd2 / data_term
+    return calculate_mmd
 
 
-def find_patterns(X, profile, start_time, window=8, ignored_index=None, n_iter=10, threshold=0.15):
-    time_step = X.index.to_series().diff().min()
+def find_prototypes(data, mp, start_time, col_name='consumption', 
+                                          window=24, 
+                                          max_iter=10, 
+                                          early_stopping=True, 
+                                          early_stopping_val=0.1):
+    time_step = data.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
-
     m = window * steps_per_hour
-    profile = profile[profile.index.time == start_time]
-    min_idx = int(profile.iloc[profile['nnd'].argmin()]['idx'])
-    reference = X[min_idx : min_idx+m]
+    end_time = (datetime.combine(date(2000,1,1), start_time) + timedelta(hours=window)).time()
+    
+    X = data[col_name]
+    if ('date' not in data.columns) or ('time' not in data.columns):
+        data = data.copy()
+        data['date'] = data.index.date
+        data['time'] = data.index.time
 
+    if start_time != end_time:
+        data_ = (data.between_time(start_time, end_time, include_end=False)  
+                    .pivot(index='date', columns='time', values=col_name))
+    else:
+        data_ = (data.pivot(index='date', columns='time', values=col_name))
+    
+    mp_daily = mp[mp.index.time == start_time]
+    threshold = mp_daily['nnd'].quantile(0.01)
+    min_idx = mp_daily[mp_daily['nnd'] <= threshold].sample()['idx'].item()
+    candidate = X[min_idx : min_idx+m]
     patterns = [min_idx]
-    diss_mp = None
-    stop_metric = []
-    
-    for i in range(n_iter):
-        jmp = pd.Series(data=stumpy.core.mass(reference, X), index=X.index[:-m+1])
-        jmp = jmp[jmp.index.time == start_time].to_frame('nnd')
 
-        if diss_mp is None:
-            diss_mp = jmp
+    distance = pd.Series(data=stumpy.core.mass(candidate, X), index=X.index[:-m+1])
+    distance = distance[distance.index.time == start_time]
+    distance_from_prototypes = distance.to_frame(0)
+    distance = distance.to_frame('nnd')
+    
+    dist_mp = None
+    candidates = np.array(candidate).T.reshape(1,-1)
+
+    if early_stopping:
+        stopping_metric = []
+        calculate_mmd = maximum_mean_discrepancy(data_)
+    
+    for i in range(1, max_iter):
+        if dist_mp is None:
+            dist_mp = distance
         else:
-            diss_mp = diss_mp.mask(jmp < diss_mp, jmp)    
-
-        rel_profile = (profile['nnd'] / diss_mp['nnd']).to_frame()
-        rel_profile['idx'] = profile['idx']
-        if ignored_index is not None:
-            rel_profile = rel_profile[~np.isin(rel_profile.index, ignored_index)]
+            dist_mp = dist_mp.mask(distance < dist_mp, distance) 
+            
+        rel_profile = (mp_daily['nnd'] / dist_mp['nnd']).to_frame()
+        rel_profile['idx'] = mp_daily['idx']
         rel_profile['nnd'] = rel_profile['nnd'].clip(upper=1)
-
-        min_idx = int(rel_profile.iloc[rel_profile['nnd'].argmin()]['idx'])
-        reference = X[min_idx : min_idx+m]
-        patterns.append(min_idx)
-        stop_metric.append(rel_profile['nnd'].quantile(0.05))
         
-    x_d = range(len(stop_metric))
-    curve = UnivariateSpline(x_d, np.array(stop_metric))(x_d)
-    n_patterns = 2 + np.where(abs(1 - (curve[1:] / curve[:-1]))<threshold)[0][0]
-    return curve, patterns[:n_patterns] #reference patterns 
+        threshold = rel_profile['nnd'].quantile(0.01)
+        min_idx = rel_profile[rel_profile['nnd'] <= threshold].sample()['idx'].item()
+        candidate = X[min_idx : min_idx+m]
+        patterns.append(min_idx)
+        
+        distance = pd.Series(data=stumpy.core.mass(candidate, X), index=X.index[:-m+1])
+        distance = distance[distance.index.time == start_time]
+        distance_from_prototypes = pd.concat(
+                        [distance_from_prototypes, distance.to_frame(i)], 
+                        axis=1
+        )
+        distance = distance.to_frame('nnd')
+        candidates = np.concatenate((np.array(candidate).T.reshape(1,-1), candidates))
+        
+        if early_stopping:
+            stopping_metric.append(calculate_mmd(candidates))
+            stopping_metric_ = pd.Series(stopping_metric)
+            res = stopping_metric_[((stopping_metric_.abs() < early_stopping_val).rolling(2).sum()==2)]
+            if len(res) > 0:
+                break
+
+    return patterns, distance_from_prototypes, stopping_metric
 
 
-def find_similarities(X, patterns, start_time, window=8, ignored_index=None):
-    time_step = X.index.to_series().diff().min()
-    steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
-    m = window * steps_per_hour
-    end_time = (datetime.combine(date(1970,1,1), start_time) + timedelta(hours=window)).time()
+def create_mmc_pairs(distances, n_pairs):
+    daily_index = distances.index.map(lambda x: x.date)
+    positive_pairs = np.ones((n_pairs, 3), dtype=np.int32)
+    negative_pairs = (-1) * np.ones((n_pairs, 3), dtype=np.int32) 
+    batch_size = int(n_pairs / distances.shape[1])
 
-    similarity_1 = lambda a, b: 1 - (np.var(b-a) / np.var(a))
-    similarity_2 = lambda a, b: cosine_similarity(np.atleast_2d(a), np.atleast_2d(b)).item()
+    for i, prototype in enumerate(distances.columns): 
+        threshold_low = distances[prototype].quantile(0.1)
+        threshold_high = distances[prototype].quantile(0.8)
+        
+        for j in range(batch_size*i, batch_size*i+batch_size):
+            similar = distances[distances[prototype] <= threshold_low]
+            similar = similar.sample(n=3, replace=False)
+            similar = similar.sort_values(by=prototype)
+            dissimilar = distances[distances[prototype] >= threshold_high].sample(n=1)
+           
+            positive_pairs[j, 0] = daily_index.get_loc(similar.index[0].date())
+            positive_pairs[j, 1] = daily_index.get_loc(similar.index[1].date())
+            negative_pairs[j, 0] = daily_index.get_loc(similar.index[2].date())
+            negative_pairs[j, 1] = daily_index.get_loc(dissimilar.index[0].date())
 
-    results = []
-    for i, idx in enumerate(patterns):
-        reference = X[idx: idx+m]
-        res = defaultdict(list)
-
-        for name, group in X.groupby(lambda x: x.date):
-            r = similarity_1(
-                        reference.values,
-                        group.between_time(start_time, end_time, include_end=False).values
-                )
-            res[name].append(r)      
-
-            r = similarity_2(
-                        reference.values,
-                        group.between_time(start_time, end_time, include_end=False).values
-            )
-            res[name].append(r)
-
-        results.append(pd.DataFrame.from_dict(res, orient='index', 
-                                                   columns=[f'snr_{i}', f'cos_{i}'])
-        )      
-
-    similarities = pd.concat(results, axis=1)
-    if ignored_index is not None:
-        similarities = similarities[~np.isin(similarities.index, ignored_index.date)]
-    
-    snr_columns = [col for col in similarities.columns if 'snr' in col]
-    snr = similarities[snr_columns]
-    similarities.loc[:, snr_columns] = (MinMaxScaler(feature_range=(0, 1))
-                                         .fit_transform(snr.values.flatten()[:, None])
-                                         .reshape(snr.shape))
-
-    cos_columns = [col for col in similarities.columns if 'cos' in col]
-    cos = similarities[cos_columns]
-    similarities.loc[:, cos_columns] = (MinMaxScaler(feature_range=(0, 1))
-                                         .fit_transform(cos.values.flatten()[:, None])
-                                         .reshape(cos.shape))
-    
-    results = np.zeros((similarities.shape[0], len(patterns)))
-    for i in range(len(patterns)):
-        results[:, i] = (similarities[f'snr_{i}']**2 + similarities[f'cos_{i}']**2).map(np.sqrt).values
-
-    return pd.DataFrame(results, index=similarities.index)
+    positive_pairs = np.unique(positive_pairs, axis=0)
+    negative_pairs = np.unique(negative_pairs, axis=0)
+    pairs = np.concatenate((positive_pairs, negative_pairs))
+    return pairs
 
 
-def assign_clusters(similarities, threshold=7, exclude_cluster=None):
-    if exclude_cluster is not None:
-        if not isinstance(exclude_cluster, list):
-            exclude_cluster = [exclude_cluster]
-        similarities = similarities[[col for col in similarities.columns if col not in exclude_cluster]]
-        similarities = similarities.rename(columns={col: i for i, col in enumerate(similarities.columns)})
-    
-    clusters = similarities.idxmax(axis=1)
-    counts = clusters.value_counts()
-    keep = counts[counts >= threshold].index.tolist()
-    similarities = similarities[keep]
-    similarities = similarities.rename(columns={col: i for i, col in enumerate(similarities.columns)})
-    clusters = similarities.idxmax(axis=1)
-    return similarities, clusters
+def create_mmc_features(daily_index):
+    features = pd.DataFrame.from_dict({
+        'month': daily_index.month,
+        'dayofweek': daily_index.dayofweek,
+    })
+
+    features = pd.DataFrame(
+        data=np.concatenate((pd.get_dummies(features['dayofweek']).values, 
+                             pd.get_dummies(features['month']).values), axis=1),
+        index=daily_index) 
+    return features
 
 
-def create_classification_features(data, start_time, end_time, ignored_index=None):
-    if ignored_index is not None:
-        data = data[~np.isin(data.index, ignored_index)]
-    
-    X = (
-            data.between_time(start_time, end_time, include_end=False)[['Temperature']]
-                .groupby(lambda x: x.date)
-                .max()
-                .rename(columns={'Temperature': 'Temperature_max'})
+def learn_distance_metric(features, pairs):
+    X_train, X_test, y_train, y_test = train_test_split(pairs[:, :2], pairs[:, -1], 
+                shuffle=True, stratify=pairs[:, -1], test_size=0.5
     )
+
+    mmc = MMC(preprocessor=features.values.astype(float))
+    mmc = mmc.fit(X_train, y_train)
+    score = f1_score(y_test, mmc.predict(X_test), average='weighted')
+    return score, mmc
     
-    X = (
-            data.between_time(start_time, end_time, include_end=False)[['Temperature']]
-                .groupby(lambda x: x.date)
-                .min()
-                .rename(columns={'Temperature': 'Temperature_min'})
-                .join(X)
-    )
     
-    X.index = X.index.map(pd.to_datetime)
-    X['DayOfWeek'] = X.index.dayofweek
-    X['DayOfMonth'] = X.index.day
-    X['MonthOfYear'] = X.index.month
-    return X
