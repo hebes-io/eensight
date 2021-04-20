@@ -16,6 +16,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import euclidean_distances
 
 
+def get_days_to_ignore(data, start_time, end_time, threshold=0.3):
+    def _ignore(x):
+        pct_imputed = x['consumption_imputed'].sum() / x['consumption_imputed'].count()
+        return pct_imputed > threshold
+    
+    should_ignore = (data.between_time(start_time, end_time, include_end=False)
+                .groupby(lambda x: x.date)
+                .apply(_ignore)
+    )
+    return should_ignore[should_ignore].index
+
 
 def get_matrix_profile(X: pd.Series, window=24) -> pd.DataFrame:
     time_step = X.index.to_series().diff().min()
@@ -51,7 +62,8 @@ def maximum_mean_discrepancy(data):
 def find_prototypes(data, mp, start_time, col_name='consumption', 
                                           window=24, 
                                           max_iter=10, 
-                                          early_stopping=True, 
+                                          ignored_index=None, 
+                                          early_stopping=True,
                                           early_stopping_val=0.1):
     time_step = data.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
@@ -71,8 +83,11 @@ def find_prototypes(data, mp, start_time, col_name='consumption',
         data_ = (data.pivot(index='date', columns='time', values=col_name))
     
     mp_daily = mp[mp.index.time == start_time]
-    threshold = mp_daily['nnd'].quantile(0.01)
-    min_idx = mp_daily[mp_daily['nnd'] <= threshold].sample()['idx'].item()
+    
+    if ignored_index is not None:
+        mp_daily = mp_daily[~np.isin(mp_daily.index.date, ignored_index)]
+    
+    min_idx = int(mp_daily.iloc[mp_daily['nnd'].argmin()]['idx'])
     candidate = X[min_idx : min_idx+m]
     patterns = [min_idx]
 
@@ -89,6 +104,9 @@ def find_prototypes(data, mp, start_time, col_name='consumption',
         calculate_mmd = maximum_mean_discrepancy(data_)
     
     for i in range(1, max_iter):
+        if ignored_index is not None:
+            distance = distance[~np.isin(distance.index.date, ignored_index)]
+        
         if dist_mp is None:
             dist_mp = distance
         else:
@@ -97,9 +115,9 @@ def find_prototypes(data, mp, start_time, col_name='consumption',
         rel_profile = (mp_daily['nnd'] / dist_mp['nnd']).to_frame()
         rel_profile['idx'] = mp_daily['idx']
         rel_profile['nnd'] = rel_profile['nnd'].clip(upper=1)
-        
+    
         threshold = rel_profile['nnd'].quantile(0.01)
-        min_idx = rel_profile[rel_profile['nnd'] <= threshold].sample()['idx'].item()
+        min_idx = int(rel_profile[rel_profile['nnd'] <= threshold].sample()['idx'].item())
         candidate = X[min_idx : min_idx+m]
         patterns.append(min_idx)
         
@@ -150,6 +168,9 @@ def create_mmc_pairs(distances, n_pairs):
 
 
 def create_mmc_features(daily_index):
+    if not isinstance(daily_index, pd.DatetimeIndex):
+        daily_index = pd.to_datetime(daily_index)
+    
     features = pd.DataFrame.from_dict({
         'month': daily_index.month,
         'dayofweek': daily_index.dayofweek,
@@ -158,7 +179,7 @@ def create_mmc_features(daily_index):
     features = pd.DataFrame(
         data=np.concatenate((pd.get_dummies(features['dayofweek']).values, 
                              pd.get_dummies(features['month']).values), axis=1),
-        index=daily_index) 
+        index=daily_index.date) 
     return features
 
 

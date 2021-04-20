@@ -7,4 +7,7 @@ from ._data_validation import remove_dublicate_dates, expand_to_all_dates
 from ._seasonal_prediction import seasonal_predict, SeasonalModel
 
 from ._day_typing import (get_matrix_profile, maximum_mean_discrepancy, find_prototypes, 
-                         create_mmc_pairs, create_mmc_features, learn_distance_metric)
+                         create_mmc_pairs, create_mmc_features, learn_distance_metric,
+                         get_days_to_ignore)
+
+from ._clustering import RankedPoints
