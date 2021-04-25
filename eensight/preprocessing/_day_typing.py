@@ -12,8 +12,59 @@ import pandas as pd
 from metric_learn import MMC
 from sklearn.metrics import f1_score
 from datetime import date, datetime, timedelta
+from sklearn.utils import check_array
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.base import BaseEstimator, TransformerMixin
+
+
+
+class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
+    def __init__(self, month_col=None, day_of_week_col=None):
+        self.month_col = month_col
+        self.day_of_week_col = day_of_week_col 
+
+    def fit(self, X, y=None):
+        # Return the transformer
+        return self
+
+    def transform(self, X):
+        """ A reference implementation of a transform function.
+        
+        Parameters
+        ----------
+        X : pd.DataFrame of shape (n_samples, n_features) 
+            Training data.
+        
+        Returns
+        -------
+        X_transformed : pd.DataFrame
+        """
+        index = X.index
+        if not isinstance(index, pd.DatetimeIndex):
+            index = pd.to_datetime(index)
+        
+        if (self.month_col is None) or (self.day_of_week_col is None):
+            features = pd.DataFrame.from_dict({
+                            'month': index.month,
+                            'dayofweek': index.dayofweek,
+                        })
+            features = pd.DataFrame(
+                    data=np.concatenate((pd.get_dummies(features['month']).values, 
+                                         pd.get_dummies(features['dayofweek']).values), axis=1),
+                    index=index.date
+            ) 
+        else:
+            # Input validation
+            X = check_array(X)
+            daily_data = pd.DataFrame(data=X, index=index).resample('1D').first()
+            features = np.concatenate((pd.get_dummies(daily_data[self.month_col]), 
+                                       pd.get_dummies(daily_data[self.day_of_week_col])), axis=1)
+        return features
+
+
+
+
 
 
 def get_days_to_ignore(data, start_time, end_time, threshold=0.3):
@@ -140,17 +191,18 @@ def find_prototypes(data, mp, start_time, col_name='consumption',
     return patterns, distance_from_prototypes, stopping_metric
 
 
-def create_mmc_pairs(distances, n_pairs):
+def create_mmc_pairs(distances, pairs_per_prototype=500):
     daily_index = distances.index.map(lambda x: x.date)
+    n_pairs = int(pairs_per_prototype * distances.shape[1])
+    
     positive_pairs = np.ones((n_pairs, 3), dtype=np.int32)
     negative_pairs = (-1) * np.ones((n_pairs, 3), dtype=np.int32) 
-    batch_size = int(n_pairs / distances.shape[1])
 
     for i, prototype in enumerate(distances.columns): 
         threshold_low = distances[prototype].quantile(0.1)
         threshold_high = distances[prototype].quantile(0.8)
         
-        for j in range(batch_size*i, batch_size*i+batch_size):
+        for j in range(pairs_per_prototype*i, pairs_per_prototype*i+pairs_per_prototype):
             similar = distances[distances[prototype] <= threshold_low]
             similar = similar.sample(n=3, replace=False)
             similar = similar.sort_values(by=prototype)
@@ -166,21 +218,6 @@ def create_mmc_pairs(distances, n_pairs):
     pairs = np.concatenate((positive_pairs, negative_pairs))
     return pairs
 
-
-def create_mmc_features(daily_index):
-    if not isinstance(daily_index, pd.DatetimeIndex):
-        daily_index = pd.to_datetime(daily_index)
-    
-    features = pd.DataFrame.from_dict({
-        'month': daily_index.month,
-        'dayofweek': daily_index.dayofweek,
-    })
-
-    features = pd.DataFrame(
-        data=np.concatenate((pd.get_dummies(features['dayofweek']).values, 
-                             pd.get_dummies(features['month']).values), axis=1),
-        index=daily_index.date) 
-    return features
 
 
 def learn_distance_metric(features, pairs):

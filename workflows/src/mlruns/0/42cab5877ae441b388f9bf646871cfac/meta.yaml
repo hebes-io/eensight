@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/spapadelis/Desktop/eensight/workflows/src/mlruns/0/42cab5877ae441b388f9bf646871cfac/artifacts
+end_time: 1619375400249
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: 42cab5877ae441b388f9bf646871cfac
+run_uuid: 42cab5877ae441b388f9bf646871cfac
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1619375392676
+status: 3
+tags: []
+user_id: spapadelis

@@ -3,14 +3,21 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+
 import numpy as np
 import pandas as pd
 
+from hdbscan import HDBSCAN
+from collections import OrderedDict
+from joblib import Memory
 from scipy.spatial.distance import cdist
+from sklearn.utils import check_array
+from sklearn.utils.validation import check_is_fitted
+
+
 
 
 class RankedPoints:
-    
     def __init__(self, points, clusterer, metric='euclidean', 
                                           selection_method='centroid', 
                                           ignored_index=None):
@@ -130,3 +137,172 @@ class RankedPoints:
     def get_furthest_samples_for_cluster(self, cluster_id, n_samples=5):
         """Get the N points furthest away from the cluster centroid/medoid"""
         return self.rank_cluster_points_by_distance(cluster_id).tail(n_samples)
+
+
+
+class ClusterPredictor(HDBSCAN):
+    """ A wrapper around HDBSCAN models.
+        
+    Parameters
+    ----------
+    min_cluster_size : int, optional (default=5)
+        The minimum size of clusters; single linkage splits that contain
+        fewer points than this will be considered points "falling out" of a
+        cluster rather than a cluster splitting into two new clusters.
+    min_samples : int, optional (default=None)
+        The number of samples in a neighbourhood for a point to be
+        considered a core point.
+    metric : string, or callable, optional (default='euclidean')
+        The metric to use when calculating distance between instances in a
+        feature array. If metric is a string or callable, it must be one of
+        the options allowed by metrics.pairwise.pairwise_distances for its
+        metric parameter.
+        If metric is "precomputed", X is assumed to be a distance matrix and
+        must be square.
+    p : int, optional (default=None)
+        p value to use if using the minkowski metric.
+    alpha : float, optional (default=1.0)
+        A distance scaling parameter as used in robust single linkage.
+    cluster_selection_epsilon: float, optional (default=0.0)
+		A distance threshold. Clusters below this value will be merged.
+    algorithm : string, optional (default='best')
+        Exactly which algorithm to use; hdbscan has variants specialised
+        for different characteristics of the data. By default this is set
+        to ``best`` which chooses the "best" algorithm given the nature of
+        the data. You can force other options if you believe you know
+        better. Options are:
+            * ``best``
+            * ``generic``
+            * ``prims_kdtree``
+            * ``prims_balltree``
+            * ``boruvka_kdtree``
+            * ``boruvka_balltree``
+    leaf_size: int, optional (default=40)
+        If using a space tree algorithm (kdtree, or balltree) the number
+        of points ina leaf node of the tree. This does not alter the
+        resulting clustering, but may have an effect on the runtime
+        of the algorithm.
+    memory : Instance of joblib.Memory or string (optional)
+        Used to cache the output of the computation of the tree.
+        By default, no caching is done. If a string is given, it is the
+        path to the caching directory.
+    approx_min_span_tree : bool, optional (default=True)
+        Whether to accept an only approximate minimum spanning tree.
+        For some algorithms this can provide a significant speedup, but
+        the resulting clustering may be of marginally lower quality.
+        If you are willing to sacrifice speed for correctness you may want
+        to explore this; in general this should be left at the default True.
+    gen_min_span_tree: bool, optional (default=False)
+        Whether to generate the minimum spanning tree with regard
+        to mutual reachability distance for later analysis.
+    core_dist_n_jobs : int, optional (default=4)
+        Number of parallel jobs to run in core distance computations (if
+        supported by the specific algorithm). For ``core_dist_n_jobs``
+        below -1, (n_cpus + 1 + core_dist_n_jobs) are used.
+    cluster_selection_method : string, optional (default='eom')
+        The method used to select clusters from the condensed tree. The
+        standard approach for HDBSCAN* is to use an Excess of Mass algorithm
+        to find the most persistent clusters. Alternatively you can instead
+        select the clusters at the leaves of the tree -- this provides the
+        most fine grained and homogeneous clusters. Options are:
+            * ``eom``
+            * ``leaf``
+    allow_single_cluster : bool, optional (default=False)
+        By default HDBSCAN* will not produce a single cluster, setting this
+        to True will override this and allow single cluster results in
+        the case that you feel this is a valid result for your dataset.
+    """
+    def __init__(self, ignored_index=None,
+                       exemplar_size=4,
+                       min_cluster_size=5, 
+                       min_samples=None, 
+                       cluster_selection_epsilon=0.0, 
+                       metric='euclidean', 
+                       alpha=1.0, 
+                       p=None, 
+                       algorithm='best', 
+                       leaf_size=40, 
+                       memory=Memory(location=None), 
+                       approx_min_span_tree=True, 
+                       gen_min_span_tree=False, 
+                       core_dist_n_jobs=4, 
+                       cluster_selection_method='eom', 
+                       allow_single_cluster=False):
+        
+        self.ignored_index = ignored_index
+        self.exemplar_size = exemplar_size
+
+        super().__init__(min_cluster_size=min_cluster_size, 
+                       min_samples=min_samples, 
+                       cluster_selection_epsilon=cluster_selection_epsilon, 
+                       metric=metric, 
+                       alpha=alpha, 
+                       p=p, 
+                       algorithm=algorithm, 
+                       leaf_size=leaf_size, 
+                       memory=memory, 
+                       approx_min_span_tree=approx_min_span_tree, 
+                       gen_min_span_tree=gen_min_span_tree, 
+                       core_dist_n_jobs=core_dist_n_jobs, 
+                       cluster_selection_method=cluster_selection_method, 
+                       allow_single_cluster=allow_single_cluster, 
+                       prediction_data=False, 
+                       match_reference_implementation=False)
+
+
+    def fit(self, X, y=None):
+        index = X.index
+        super().fit(X) 
+        
+        self.cluster_mapping_ = pd.DataFrame.from_dict({
+            'month': index.month,
+            'dayofweek': index.dayofweek,
+            'cluster': self.labels_
+        }).drop_duplicates()
+
+        ranked_points = RankedPoints(X, self, metric=self.metric, 
+                                              selection_method='medoid',
+                                              ignored_index=self.ignored_index)
+
+        self.exemplars_ = OrderedDict()
+        for cat in sorted(np.unique(self.labels_)):
+            if (cat == -1) or (np.sum(self.cluster_mapping_['cluster'] == cat) < self.exemplar_size):
+                continue 
+            else:
+                self.exemplars_[cat] = ranked_points.get_closest_samples_for_cluster(
+                                            cat, n_samples=self.exemplar_size).index
+        self.fitted_ = True
+        return self 
+
+
+    def create_codebook(self, data):
+        check_is_fitted(self, 'fitted_')
+        self.codebook_ = {}
+        
+        for cat in self.exemplars_.keys():
+            mask = np.isin(data.index.date, self.exemplars_[cat])
+            self.codebook_[cat] = data[mask].groupby(lambda x: x.date).mean()
+        return self 
+    
+    
+    def predict(self, X):
+        check_is_fitted(self, 'fitted_')
+        index = X.index
+
+        X = pd.DataFrame.from_dict({
+                'month': index.month,
+                'dayofweek': index.dayofweek,
+            })
+        
+        return X.apply(
+            lambda x: self.cluster_mapping_[
+                            (self.cluster_mapping_['month']==x['month']) &
+                            (self.cluster_mapping_['dayofweek']==x['dayofweek'])
+                       ]['cluster'].item(), 
+            axis=1
+        )
+        
+
+    def fit_predict(self, X, y=None):
+        self.fit(self, X)
+        return self.predict(X)

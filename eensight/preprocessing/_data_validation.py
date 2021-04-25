@@ -555,3 +555,34 @@ def expand_to_all_dates(data, date_column):
     data.index.set_names(index_name, inplace=True)
     return data.reset_index()
 
+
+
+################## Composite functions #####################################################
+############################################################################################
+
+def validate_data(data, col_name, date_col_name=None):
+    date_col_name = date_col_name or 'timestamp'
+    
+    if not (check_column_exists(data, date_col_name).success and 
+            check_column_exists(data, col_name).success
+    ):
+        raise ValueError('Input dataset is misspecified') 
+
+    if (not check_column_type_datetime(data, date_col_name).success and 
+        check_column_values_dateutil_parseable(data, date_col_name).success
+    ):
+        data[date_col_name] = data[date_col_name].map(pd.to_datetime)
+
+    if not check_column_type_datetime(data, date_col_name).success:
+        raise ValueError(f'Column `{date_col_name}` must be in datetime format')
+
+    if not check_column_values_unique(data, date_col_name).success:
+        data = remove_dublicate_dates(data, date_col_name)
+
+    if not check_column_values_increasing(data, date_col_name).success:
+        data = data.sort_values(by=[date_col_name])
+
+    data = expand_to_all_dates(data, date_col_name)
+    data = data[[date_col_name, col_name]].set_index(date_col_name)
+    return data
+
