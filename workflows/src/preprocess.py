@@ -12,11 +12,11 @@ import numpy as np
 import pandas as pd 
 from pathlib import Path
 from joblib import Parallel, delayed
-
-from eensight.definitions import DATA_DIR
+from eensight.definitions import DataStage
+from eensight.prediction import seasonal_predict
 from eensight.preprocessing import validate_data, check_column_values_not_null
 from eensight.preprocessing import global_filter, global_outlier_detect, local_outlier_detect
-from eensight.prediction import seasonal_predict
+
 
 
 def linear_impute(X, window=6):
@@ -58,47 +58,69 @@ def dataframe_loader(file_path, sep=','):
         raise ValueError(f'Unsupported file_type {file_type}')
 
 
-def _single_pipeline(data, target_name, run_id, rebind):
-    col_name = rebind.get(target_name) or target_name
-    date_col_name = rebind.get('timestamp') or 'timestamp'
-    data = validate_data(data, col_name, date_col_name=date_col_name) 
-    data[target_name] = global_filter(
-                            data[target_name], 
-                            no_change_window=4,
-                            allow_zero=False if target_name=='consumption' else True, 
-                            allow_negative=False if target_name=='consumption' else True
-    )
-    pred, model = seasonal_predict(data, target_name=target_name)
+def dataframe_writer(df, file_name, data_stage, run_id, sep=','):
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError(f'Expected input type was `pandas DataFrame` but received {type(df)}')
     
-    path = os.path.join(DATA_DIR, '06_models',  run_id)
+    path = os.path.join(data_stage.value, run_id)
     if not os.path.exists(path):
         os.makedirs(path)
-    mlflow.sklearn.log_model(model, path)
-
-    residuals = data[target_name] - pred[f'{target_name}_pred']
-    outliers_global = global_outlier_detect(residuals)
-    outliers_local = local_outlier_detect(residuals)
-    outliers = np.logical_and(outliers_global, outliers_local)
-    data[target_name] = data[target_name].mask(outliers, other=np.nan)
+        
+    _, file_type = file_name.split('.')   
     
-    if target_name == 'consumption':
-        for _, group in data.groupby([lambda x: x.year, lambda x: x.month]):
-            check = check_column_values_not_null(group, 'consumption', mostly=0.9)
-            if not check.success:
-                raise ValueError('Consumption data is not enough for baseline model development')
+    if file_type == 'csv':
+        df.to_csv(os.path.join(path, file_name), sep=sep)
+    elif file_type == 'parquet':
+        df.to_parquet(os.path.join(path, file_name))
+    elif file_type == 'table':
+        df.to_csv(os.path.join(path, file_name), sep="\t", index=False)
+    else:
+        raise ValueError(f'Unsupported file_type {file_type}')
+    
+    return path
+    
 
-        data['consumption_imputed'] = False
-        data['consumption_imputed'] = (
-                data['consumption_imputed'].mask(data['consumption'].isna(), other=True)
+def _single_step(file_path, sep, target_name, run_id, rebind):
+    col_name = rebind.get(target_name) or target_name
+    date_col_name = rebind.get('timestamp') or 'timestamp'
+    
+    with mlflow.start_run(tags={'parent': run_id, 'target': target_name}):
+        data = dataframe_loader(file_path, sep=sep)
+        data = validate_data(data, col_name, date_col_name=date_col_name) 
+        data[col_name] = global_filter(
+                                data[col_name], 
+                                no_change_window=4,
+                                allow_zero=False if target_name=='consumption' else True, 
+                                allow_negative=False if target_name=='consumption' else True
         )
-        data['consumption'] = (
-                data['consumption'].mask(data['consumption_imputed'], other=pred['consumption_pred'])
-        ) 
-    return data 
+        pred, model = seasonal_predict(data, target_name=col_name)
+        mlflow.sklearn.log_model(model, artifact_path='seasonal-prediction-model')
+
+        residuals = data[col_name] - pred[f'{col_name}_pred']
+        outliers_global = global_outlier_detect(residuals)
+        outliers_local = local_outlier_detect(residuals)
+        outliers = np.logical_and(outliers_global, outliers_local)
+        data[col_name] = data[col_name].mask(outliers, other=np.nan)
+        
+        if target_name == 'consumption':
+            for _, group in data.groupby([lambda x: x.year, lambda x: x.month]):
+                check = check_column_values_not_null(group, col_name, mostly=0.9)
+                if not check.success:
+                    raise ValueError('Consumption data is not enough for baseline model development')
+
+            data[f'{col_name}_imputed'] = False
+            data[f'{col_name}_imputed'] = (
+                    data[f'{col_name}_imputed'].mask(data[col_name].isna(), other=True)
+            )
+            data[col_name] = (
+                    data[col_name].mask(data[f'{col_name}_imputed'], other=pred[f'{col_name}_pred'])
+            ) 
+
+        return data 
 
     
-
-@click.command(help='Performs the data preprocessing stage')
+@click.command(help='Given a path to an energy consumption data file and a path to an outdoor '
+                    'temperature data file, performs the data preprocessing stage')
 @click.option("--consumption", help='The path to the consumption data file', 
                                required=True, 
                                type=str)
@@ -117,9 +139,7 @@ def _single_pipeline(data, target_name, run_id, rebind):
                           default=None, 
                           multiple=True, 
                           type=(str, str))
-def preprocess_data(consumption, temperature, consumption_sep=',', 
-                                              temperature_sep=',', 
-                                              rebind=None):
+def preprocess_data(consumption, temperature, consumption_sep=',', temperature_sep=',', rebind=None):
     """
     Parameters
     ----------
@@ -133,27 +153,37 @@ def preprocess_data(consumption, temperature, consumption_sep=',',
         Delimiter to use for the energy consumption data.
     temperature_sep : str, default ','
         Delimiter to use for the outdoor temperature data.
-    rebind : tuple of tuples, default None 
-        Each nested tuple allows us to map a new name onto a required one
-    """ 
-    with mlflow.start_run() as mlrun:
-        rebind = dict(rebind)
-        consumption = dataframe_loader(consumption, sep=consumption_sep)
-        temperature = dataframe_loader(temperature, sep=temperature_sep)
+    rebind : dictionary or tuple of tuples, default None 
+        Each dictionary entry or nested tuple allows us to map a new name onto a required one (
+        'consumption', 'temperature', timestamp').
 
+    """ 
+    if (rebind is not None) and not isinstance(rebind, dict):
+        rebind = dict(rebind)
+    elif rebind is None:
+        rebind = dict()
+    
+    with mlflow.start_run() as mlrun:
+        run_id = mlrun.info.run_id
+    
         consumption, temperature = (Parallel(n_jobs=2)(
-                delayed(_single_pipeline)(data, target_name, mlrun.info.run_id, rebind) 
-                                    for data, target_name in 
-                                    zip([consumption, temperature], ['consumption', 'temperature'])
+                delayed(_single_step)(file_path, sep, target_name, run_id, rebind) 
+                                        for file_path, sep, target_name in 
+                                        zip([consumption,     temperature], 
+                                            [consumption_sep, temperature_sep],
+                                            ['consumption',   'temperature'])
                 )
         )
         data = pd.merge_asof(consumption, temperature, left_index=True, right_index=True,
                                 direction='nearest', tolerance=pd.Timedelta('1H'))
         
-        data[rebind.get('temperature') or 'temperature'] = linear_impute(
-                    data[rebind.get('temperature') or 'temperature']
-        )
-        return data 
+        temperature_col = rebind.get('temperature') or 'temperature'
+        data[temperature_col] = linear_impute(data[temperature_col])
+
+        path = dataframe_writer(data, 'merged_data.csv', DataStage.INTERMEDIATE, run_id, sep=',')
+        mlflow.log_artifacts(path, "merged-data")
+    
+    return data 
     
 
 
