@@ -7,13 +7,16 @@
 import numpy as np
 import pandas as pd
 
+from joblib import Memory
 from hdbscan import HDBSCAN
 from collections import OrderedDict
-from joblib import Memory
-from scipy.spatial.distance import cdist
 from sklearn.utils import check_array
+from scipy.spatial.distance import cdist
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils.validation import check_is_fitted
+from sklearn.base import ClusterMixin, ClassifierMixin
 
+from eensight.prediction._base import _BaseHeterogeneousEnsemble
 
 
 
@@ -140,7 +143,7 @@ class RankedPoints:
 
 
 
-class ClusterPredictor(HDBSCAN):
+class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble):
     """ A wrapper around HDBSCAN models.
         
     Parameters
@@ -212,9 +215,7 @@ class ClusterPredictor(HDBSCAN):
         to True will override this and allow single cluster results in
         the case that you feel this is a valid result for your dataset.
     """
-    def __init__(self, ignored_index=None,
-                       exemplar_size=4,
-                       min_cluster_size=5, 
+    def __init__(self, min_cluster_size=5, 
                        min_samples=None, 
                        cluster_selection_epsilon=0.0, 
                        metric='euclidean', 
@@ -227,82 +228,108 @@ class ClusterPredictor(HDBSCAN):
                        gen_min_span_tree=False, 
                        core_dist_n_jobs=4, 
                        cluster_selection_method='eom', 
-                       allow_single_cluster=False):
+                       allow_single_cluster=False,
+                       ignored_index=None,
+                       exemplar_size=4,
+                       n_neighbors=1):
         
+        self.min_cluster_size = min_cluster_size
+        self.min_samples = min_samples
+        self.alpha = alpha
+        self.cluster_selection_epsilon = cluster_selection_epsilon
+        self.metric = metric
+        self.p = p
+        self.algorithm = algorithm
+        self.leaf_size = leaf_size
+        self.memory = memory
+        self.approx_min_span_tree = approx_min_span_tree
+        self.gen_min_span_tree = gen_min_span_tree
+        self.core_dist_n_jobs = core_dist_n_jobs
+        self.cluster_selection_method = cluster_selection_method
+        self.allow_single_cluster = allow_single_cluster
         self.ignored_index = ignored_index
         self.exemplar_size = exemplar_size
-
-        super().__init__(min_cluster_size=min_cluster_size, 
-                       min_samples=min_samples, 
-                       cluster_selection_epsilon=cluster_selection_epsilon, 
-                       metric=metric, 
-                       alpha=alpha, 
-                       p=p, 
-                       algorithm=algorithm, 
-                       leaf_size=leaf_size, 
-                       memory=memory, 
-                       approx_min_span_tree=approx_min_span_tree, 
-                       gen_min_span_tree=gen_min_span_tree, 
-                       core_dist_n_jobs=core_dist_n_jobs, 
-                       cluster_selection_method=cluster_selection_method, 
-                       allow_single_cluster=allow_single_cluster, 
-                       prediction_data=False, 
-                       match_reference_implementation=False)
-
+        self.n_neighbors = n_neighbors
+        
+        self.estimators = [
+            ('clusterer', HDBSCAN(min_cluster_size=min_cluster_size,
+                                  min_samples=min_samples,
+                                  alpha=alpha,
+                                  cluster_selection_epsilon=cluster_selection_epsilon,
+                                  metric=metric,
+                                  p=p,
+                                  algorithm=algorithm,
+                                  leaf_size=leaf_size,
+                                  memory=memory,
+                                  approx_min_span_tree=approx_min_span_tree,
+                                  gen_min_span_tree=gen_min_span_tree,
+                                  core_dist_n_jobs=core_dist_n_jobs,
+                                  cluster_selection_method=cluster_selection_method,
+                                  allow_single_cluster=allow_single_cluster)), 
+            ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors, metric = metric))
+        ]
+        
 
     def fit(self, X, y=None):
-        index = X.index
-        super().fit(X) 
+        X = pd.DataFrame(data=check_array(X), 
+                         index=X.index, 
+                         columns=X.columns)
+        clusterer = self.named_estimators['clusterer']
+        labels = clusterer.fit_predict(X)
         
-        self.cluster_mapping_ = pd.DataFrame.from_dict({
-            'month': index.month,
-            'dayofweek': index.dayofweek,
-            'cluster': self.labels_
-        }).drop_duplicates()
-
-        ranked_points = RankedPoints(X, self, metric=self.metric, 
-                                              selection_method='medoid',
-                                              ignored_index=self.ignored_index)
+        ranked_points = RankedPoints(X, clusterer, metric=self.metric, 
+                                                   selection_method='medoid',
+                                                   ignored_index=self.ignored_index)
 
         self.exemplars_ = OrderedDict()
-        for cat in sorted(np.unique(self.labels_)):
-            if (cat == -1) or (np.sum(self.cluster_mapping_['cluster'] == cat) < self.exemplar_size):
+        for cat in sorted(np.unique(labels)):
+            if cat == -1:
                 continue 
             else:
                 self.exemplars_[cat] = ranked_points.get_closest_samples_for_cluster(
                                             cat, n_samples=self.exemplar_size).index
+        
+        classifier = self.named_estimators['classifier']
+        classifier.fit(X, labels)
         self.fitted_ = True
         return self 
 
 
-    def create_codebook(self, data):
-        check_is_fitted(self, 'fitted_')
-        self.codebook_ = {}
-        
-        for cat in self.exemplars_.keys():
-            mask = np.isin(data.index.date, self.exemplars_[cat])
-            self.codebook_[cat] = data[mask].groupby(lambda x: x.date).mean()
-        return self 
-    
-    
     def predict(self, X):
-        check_is_fitted(self, 'fitted_')
-        index = X.index
+        check_is_fitted(self, 'fitted_')  
+        X = pd.DataFrame(data=check_array(X), 
+                         index=X.index, 
+                         columns=X.columns)
 
-        X = pd.DataFrame.from_dict({
-                'month': index.month,
-                'dayofweek': index.dayofweek,
-            })
-        
-        return X.apply(
-            lambda x: self.cluster_mapping_[
-                            (self.cluster_mapping_['month']==x['month']) &
-                            (self.cluster_mapping_['dayofweek']==x['dayofweek'])
-                       ]['cluster'].item(), 
-            axis=1
-        )
-        
+        classifier = self.named_estimators['classifier']
+        return pd.Series(data=classifier.predict(X), index=X.index)
+
+
+    def predict_proba(self, X):
+        """Return probability estimates for the test data X.
+        """
+        check_is_fitted(self, 'fitted_')  
+        X = pd.DataFrame(data=check_array(X), 
+                         index=X.index, 
+                         columns=X.columns)
+
+        classifier = self.named_estimators['classifier']
+        return pd.DataFrame(data=classifier.predict_proba(X), 
+                            index=X.index,
+                            columns=classifier.classes_)
+
 
     def fit_predict(self, X, y=None):
-        self.fit(self, X)
-        return self.predict(X)
+        """
+        Perform clustering on `X` and returns cluster labels.
+        """
+        self.fit(X)
+        clusterer = self.named_estimators['clusterer']
+        return pd.Series(data=clusterer.labels_, index=X.index)
+        
+        
+        
+
+
+        
+
