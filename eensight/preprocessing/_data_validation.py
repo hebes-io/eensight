@@ -18,6 +18,7 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 ################## Utility functions #######################################################
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 def convert_to_json_serializable(data):
     """
     Helper function to convert an object to one that is json serializable
+    From great_expectations.core.util
     """
     try:
         if not isinstance(data, list) and pd.isna(data):
@@ -100,6 +102,7 @@ def convert_to_json_serializable(data):
 def ensure_json_serializable(data):
     """
     Helper function to convert an object to one that is json serializable
+    From great_expectations.core.util
     """
     try:
         if not isinstance(data, list) and pd.isna(data):
@@ -203,20 +206,13 @@ class ValidationResult:
         }
     
 
-def validate_args(mostly=None):
-    if mostly is not None:
-        if not isinstance(mostly, (int, float)):
-            raise TypeError("'mostly' parameter must be an integer or float")
-        if not (0 <= mostly <= 1):
-            raise ValueError("'mostly' parameter must be between 0 and 1")
-
-
-
 ################### Validation checks ######################################################
 ############################################################################################
 
 
-def check_column_exists(data, column, column_index=None, catch_exceptions=None, meta=None):
+def check_column_exists(data, column, column_index=None, 
+                                      catch_exceptions=None, 
+                                      meta=None):
     """Expect the specified column to exist.
         
     Parameters
@@ -261,7 +257,9 @@ def check_column_exists(data, column, column_index=None, catch_exceptions=None, 
         )
 
 
-def check_column_values_unique(data, column, mostly=None, catch_exceptions=None, meta=None):
+def check_column_values_unique(data, column, mostly=None, 
+                                             catch_exceptions=None, 
+                                             meta=None):
     """Expect the specified column's values to be unique.
 
     Parameters
@@ -286,7 +284,10 @@ def check_column_values_unique(data, column, mostly=None, catch_exceptions=None,
         n_missing = data[column].isna().sum()
 
         if mostly is not None:
-            validate_args(mostly=mostly)
+            if not isinstance(mostly, (int, float)):
+                raise TypeError("'mostly' parameter must be an integer or float")
+            if not (0 <= mostly <= 1):
+                raise ValueError("'mostly' parameter must be between 0 and 1")
         else:
             mostly = 1 
                     
@@ -330,7 +331,8 @@ def check_column_values_unique(data, column, mostly=None, catch_exceptions=None,
 
 
 def check_column_values_increasing(data, column, parse_as_datetimes=False, 
-                                        catch_exceptions=None, meta=None):
+                                                 catch_exceptions=None, 
+                                                 meta=None):
     """Expect column values to be increasing.
     
     Parameters
@@ -338,7 +340,7 @@ def check_column_values_increasing(data, column, parse_as_datetimes=False,
     data (pandas DataFrame): The data to validate
     column (str): The column name.
     parse_as_datetimes (boolean or None) : If True, all non-null column values 
-        to datetimes before making comparisons
+        will be parsed to datetimes before making comparisons
     catch_exceptions (boolean or None): If True, then catch exceptions and include them 
         as part of the result object.
     meta (dict or None): A JSON-serializable dictionary that will be included in the output 
@@ -379,7 +381,8 @@ def check_column_values_increasing(data, column, parse_as_datetimes=False,
         )
 
 
-def check_column_type_datetime(data, column, catch_exceptions=None, meta=None):
+def check_column_type_datetime(data, column, catch_exceptions=None, 
+                                             meta=None):
     """Expect column values to be of datetime type.
 
     Parameters
@@ -419,7 +422,8 @@ def check_column_type_datetime(data, column, catch_exceptions=None, meta=None):
         )
 
 
-def check_column_values_dateutil_parseable(data, column, catch_exceptions=None, meta=None):
+def check_column_values_dateutil_parseable(data, column, catch_exceptions=None, 
+                                                         meta=None):
     exception_info = None
     
     try:
@@ -448,7 +452,9 @@ def check_column_values_dateutil_parseable(data, column, catch_exceptions=None, 
         )
 
 
-def check_column_values_not_null(data, column, mostly=None, catch_exceptions=None, meta=None):
+def check_column_values_not_null(data, column, mostly=None, 
+                                               catch_exceptions=None, 
+                                               meta=None):
     """Expect column values to not be null.
     
     Parameters
@@ -471,7 +477,10 @@ def check_column_values_not_null(data, column, mostly=None, catch_exceptions=Non
 
     try:
         if mostly is not None:
-            validate_args(mostly=mostly)
+            if not isinstance(mostly, (int, float)):
+                raise TypeError("'mostly' parameter must be an integer or float")
+            if not (0 <= mostly <= 1):
+                raise ValueError("'mostly' parameter must be between 0 and 1")
         else:
             mostly = 1 
 
@@ -572,8 +581,7 @@ def validate_data(data, col_name, date_col_name=None):
         check_column_values_dateutil_parseable(data, date_col_name).success
     ):
         data[date_col_name] = data[date_col_name].map(pd.to_datetime)
-
-    if not check_column_type_datetime(data, date_col_name).success:
+    elif not check_column_type_datetime(data, date_col_name).success:
         raise ValueError(f'Column `{date_col_name}` must be in datetime format')
 
     if not check_column_values_unique(data, date_col_name).success:

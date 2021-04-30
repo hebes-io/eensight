@@ -14,10 +14,13 @@ from sklearn.metrics import f1_score
 from datetime import date, datetime
 from types import SimpleNamespace
 from sklearn.utils import check_array
+from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.base import BaseEstimator, TransformerMixin
 
+
+from eensight.preprocessing.utils import DateFeatureTransformer
 
 
 def get_matrix_profile(X: pd.Series, window=24) -> pd.DataFrame:
@@ -195,41 +198,48 @@ def create_mmc_pairs(distances, pairs_per_prototype=100):
 
 
 class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
-    def __init__(self, start_time, month_col=None, day_of_week_col=None):
-        self.start_time = start_time 
-        self.month_col = month_col
-        self.day_of_week_col = day_of_week_col 
+    def __init__(self, month_col=None, day_of_week_col=None):
+        self.month_col = month_col or 'month'
+        self.day_of_week_col = day_of_week_col or 'dayofweek'
 
     def fit(self, X, y=None):
         # Return the transformer
         return self
 
-    def transform(self, X):
-        index = X[X.index.time == self.start_time].index
+    def transform(self, X):        
+        if not isinstance(X.index, pd.DatetimeIndex):
+            X.index = pd.to_datetime(X.index)
         
-        if not isinstance(index, pd.DatetimeIndex):
-            index = pd.to_datetime(index)
+        X = pd.DataFrame(data=check_array(X), index=X.index, columns=X.columns)
+        X = X.resample('1D').first()
         
-        if (self.month_col is None) or (self.day_of_week_col is None):
-            features = pd.DataFrame.from_dict({
-                            'month': index.month,
-                            'dayofweek': index.dayofweek,
-                        })
-            features = pd.DataFrame(
-                    data=np.concatenate((pd.get_dummies(features['month']).values, 
-                                         pd.get_dummies(features['dayofweek']).values), axis=1),
-                    index=index.date
-            ) 
-        else:
-            # Input validation
-            X = check_array(X)
-            daily_data = pd.DataFrame(data=X, index=index).resample('1D').first()
-            features = np.concatenate((pd.get_dummies(daily_data[self.month_col]), 
-                                       pd.get_dummies(daily_data[self.day_of_week_col])), axis=1)
-        return features
+        features = pd.DataFrame(0, index=X.index, columns=range(19))
+        
+        temp = pd.get_dummies(X[self.month_col].astype(int))
+        temp.index = X.index
+        for col in temp.columns:
+            features[col-1] = features[col-1].mask(temp[col]==1, other=1)
+
+        temp = pd.get_dummies(X[self.day_of_week_col].astype(int))
+        temp.index = X.index
+        for col in temp.columns:
+            features[col+12] = features[col+12].mask(temp[col]==1, other=1)
+
+        return pd.DataFrame(data=features, index=X.index)
 
 
-def learn_distance_metric(features, pairs, test_size=0.5):
+def learn_distance_metric(distances, pairs_per_prototype=100, 
+                                     test_size=0.5, 
+                                     return_features=False,
+                                     return_pairs=False):
+    feature_pipeline = Pipeline([
+        ('dates', DateFeatureTransformer()),
+        ('features', MMCFeatureTransformer()),
+    ])
+    
+    features = feature_pipeline.fit_transform(distances)
+    pairs = create_mmc_pairs(distances, pairs_per_prototype=pairs_per_prototype)
+    
     X_train, X_test, y_train, y_test = train_test_split(pairs[:, :2], pairs[:, -1], 
                 shuffle=True, stratify=pairs[:, -1], test_size=test_size
     )
@@ -239,7 +249,9 @@ def learn_distance_metric(features, pairs, test_size=0.5):
     score = f1_score(y_test, mmc.predict(X_test), average='weighted')
     return SimpleNamespace(
         score=score,
-        metric_components=mmc.components_.transpose()
+        metric_components=mmc.components_.transpose(),
+        features=None if not return_features else features,
+        pairs=None if not return_pairs else pairs 
     )
 
 

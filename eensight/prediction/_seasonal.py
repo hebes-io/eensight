@@ -9,8 +9,9 @@ import calendar
 import numpy as np 
 import pandas as pd
 
-from typing import Union
 from pampy import match
+from typing import Union
+from types import SimpleNamespace
 from collections import OrderedDict
 from sklearn.ensemble import BaseEnsemble
 from sklego.linear_model import LADRegression
@@ -104,7 +105,7 @@ class SeasonalPredictor(BaseEnsemble):
         The estimator object.
         """
         try:
-            check_is_fitted(self, 'is_fitted_')
+            check_is_fitted(self, 'fitted_')
         except NotFittedError:
             pass
         else:
@@ -310,7 +311,7 @@ class SeasonalPredictor(BaseEnsemble):
     
     def fit(self, X: pd.DataFrame, y=None):
         try:
-            check_is_fitted(self, 'is_fitted_')
+            check_is_fitted(self, 'fitted_')
         except NotFittedError:
             pass
         else:
@@ -328,12 +329,12 @@ class SeasonalPredictor(BaseEnsemble):
         
         estimator = self._make_estimator()
         estimator.fit(features, target)
-        self.is_fitted_ = True
+        self.fitted_ = True
         return self
 
 
     def predict(self, X: pd.DataFrame) -> pd.DataFrame:
-        check_is_fitted(self, 'is_fitted_')
+        check_is_fitted(self, 'fitted_')
         X = self._validate_input_data(X)
         features = self._gather_all_features(X)
         estimator = self.estimators_[0]
@@ -352,44 +353,33 @@ class SeasonalPredictor(BaseEnsemble):
 
 def seasonal_predict(data: pd.DataFrame, 
                      target_name: str='consumption',
-                     trend: str = 'c',
-                     yearly_seasonality: Union[str, bool, int] = 'auto', 
-                     weekly_seasonality: Union[str, bool, int] = 'auto', 
-                     daily_seasonality: Union[str, bool, int] = 'auto',
-                     alpha: float = 0.0, 
-                     l1_ratio: float = 0.0, 
-                     return_model=True):
+                     trend: str='c',
+                     alpha: float=0.0, 
+                     l1_ratio: float=0.0, 
+                     return_model=False):
+    
+    model = SeasonalPredictor(name=target_name, 
+                              trend=trend, 
+                              yearly_seasonality=True, 
+                              weekly_seasonality=False, 
+                              daily_seasonality=False, 
+                              alpha=alpha, 
+                              l1_ratio=l1_ratio
+    )
+    
     data = data[[target_name]].copy()
+    data['dayofweek'] = data.index.dayofweek.map(lambda x: calendar.day_abbr[x])
+    data = (data.merge(pd.get_dummies(data['dayofweek']), left_index=True, right_index=True)
+                .drop('dayofweek', axis=1))
 
-    if target_name == 'temperature':
-        model = SeasonalPredictor(name=target_name, trend=trend, 
-                                  yearly_seasonality=True, weekly_seasonality=False, 
-                                  daily_seasonality=True, alpha=alpha, l1_ratio=l1_ratio) 
-
-    elif target_name == 'consumption':
-        model = SeasonalPredictor(name=target_name, trend=trend, 
-                                  yearly_seasonality=True, weekly_seasonality=False, 
-                                  daily_seasonality=False, alpha=alpha, l1_ratio=l1_ratio)
-        
-        data['day_of_week'] = data.index.dayofweek.map(lambda x: calendar.day_abbr[x])
-        data = (data.merge(pd.get_dummies(data['day_of_week']), left_index=True, right_index=True)
-                    .drop('day_of_week', axis=1))
-
-        for i in range(7):
-            day = calendar.day_abbr[i]
-            model.add_seasonality(f'daily_{day}', period=1, fourier_order=4, condition_name=day)
-
-    else:
-        model = SeasonalPredictor(name=target_name, trend=trend, 
-                                  yearly_seasonality=yearly_seasonality, 
-                                  weekly_seasonality=weekly_seasonality, 
-                                  daily_seasonality=daily_seasonality,
-                                  alpha=alpha, l1_ratio=l1_ratio)
+    for i in range(7):
+        day = calendar.day_abbr[i]
+        model.add_seasonality(f'daily_{day}', period=1, fourier_order=4, condition_name=day)
 
     pred = model.fit_predict(data)
+    return SimpleNamespace(
+        predicted = pred,
+        resid = data[target_name] - pred[f'{target_name}_pred'],
+        model = None if not return_model else model
+    )
     
-    if return_model:
-        return pred, model 
-    else:
-        return pred
-

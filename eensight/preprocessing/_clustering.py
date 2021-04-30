@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 
 import numpy as np
 import pandas as pd
@@ -16,8 +17,13 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils.validation import check_is_fitted
 from sklearn.base import ClusterMixin, ClassifierMixin
 
-from eensight.prediction._base import _BaseHeterogeneousEnsemble
+from eensight.base import _BaseHeterogeneousEnsemble
 
+
+logger = logging.getLogger(__file__)
+logger.setLevel(logging.INFO)
+
+NOISE = -1
 
 
 class RankedPoints:
@@ -144,7 +150,8 @@ class RankedPoints:
 
 
 class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble):
-    """ A wrapper around HDBSCAN models.
+    """ A wrapper around HDBSCAN models that uses a sklearn.neighbors.KNeighborsClassifier 
+    to predict the cluster for unseen inputs.
         
     Parameters
     ----------
@@ -214,6 +221,23 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         By default HDBSCAN* will not produce a single cluster, setting this
         to True will override this and allow single cluster results in
         the case that you feel this is a valid result for your dataset.
+    ignored_index : array-like of datetime.date objects, optional (default=None)
+        Includes dates the profiles of which should not be included in the exemplars.
+        Exemplars are members of the input set that are representative of their clusters.
+    exemplar_size: int, optional (default=4)
+        The number of exemplars to store 
+    n_neighbors : int, default=5
+        Number of neighbors to use by default for :meth:`kneighbors` queries.
+    weights : {'uniform', 'distance'} or callable, default='uniform'
+        weight function used in prediction.  Possible values:
+        - 'uniform' : uniform weights.  All points in each neighborhood
+          are weighted equally.
+        - 'distance' : weight points by the inverse of their distance.
+          in this case, closer neighbors of a query point will have a
+          greater influence than neighbors which are further away.
+        - [callable] : a user-defined function which accepts an
+          array of distances, and returns an array of the same shape
+          containing the weights.
     """
     def __init__(self, min_cluster_size=5, 
                        min_samples=None, 
@@ -231,7 +255,8 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
                        allow_single_cluster=False,
                        ignored_index=None,
                        exemplar_size=4,
-                       n_neighbors=1):
+                       n_neighbors=5,
+                       weights='distance'):
         
         self.min_cluster_size = min_cluster_size
         self.min_samples = min_samples
@@ -250,6 +275,7 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         self.ignored_index = ignored_index
         self.exemplar_size = exemplar_size
         self.n_neighbors = n_neighbors
+        self.weights = weights
         
         self.estimators = [
             ('clusterer', HDBSCAN(min_cluster_size=min_cluster_size,
@@ -265,8 +291,12 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
                                   gen_min_span_tree=gen_min_span_tree,
                                   core_dist_n_jobs=core_dist_n_jobs,
                                   cluster_selection_method=cluster_selection_method,
-                                  allow_single_cluster=allow_single_cluster)), 
-            ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors, metric = metric))
+                                  allow_single_cluster=allow_single_cluster)
+            ), 
+            ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors, 
+                                                metric=metric, 
+                                                weights=weights)
+            )
         ]
         
 
@@ -274,22 +304,30 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         X = pd.DataFrame(data=check_array(X), 
                          index=X.index, 
                          columns=X.columns)
+        
         clusterer = self.named_estimators['clusterer']
         labels = clusterer.fit_predict(X)
         
+        self.probabilities_ = pd.DataFrame(
+                    data=clusterer.probabilities_,
+                    columns=['probability'],
+                    index=X.index
+        )
+        self.coverage_ = len(np.unique(X.index.dayofyear)) / 365
         ranked_points = RankedPoints(X, clusterer, metric=self.metric, 
                                                    selection_method='medoid',
                                                    ignored_index=self.ignored_index)
-
         self.exemplars_ = OrderedDict()
         for cat in sorted(np.unique(labels)):
-            if cat == -1:
+            if cat == NOISE:
                 continue 
             else:
                 self.exemplars_[cat] = ranked_points.get_closest_samples_for_cluster(
                                             cat, n_samples=self.exemplar_size).index
         
         classifier = self.named_estimators['classifier']
+        labels = self.labels_[self.labels_['label'] != NOISE]['label']
+        X = X[X.index.isin(labels.index)]
         classifier.fit(X, labels)
         self.fitted_ = True
         return self 
@@ -302,7 +340,12 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
                          columns=X.columns)
 
         classifier = self.named_estimators['classifier']
-        return pd.Series(data=classifier.predict(X), index=X.index)
+        
+        if (self.coverage_ > 0.9) and (classifier.get_params()['n_neighbors'] > 1):
+            classifier.set_params(**{'n_neighbors': 1})
+            logger.info(f'Coverage is large enough to use n_neighbors=1')
+        
+        return pd.DataFrame(data=classifier.predict(X), index=X.index, columns=['cluster'])
 
 
     def predict_proba(self, X):
@@ -314,6 +357,10 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
                          columns=X.columns)
 
         classifier = self.named_estimators['classifier']
+        if (self.coverage_ > 0.9) and (classifier.get_params()['n_neighbors'] > 1):
+            classifier.set_params({'n_neighbors': 1})
+            logger.info(f'Coverage is large enough to use n_neighbors=1')
+
         return pd.DataFrame(data=classifier.predict_proba(X), 
                             index=X.index,
                             columns=classifier.classes_)
@@ -325,7 +372,7 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         """
         self.fit(X)
         clusterer = self.named_estimators['clusterer']
-        return pd.Series(data=clusterer.labels_, index=X.index)
+        return pd.DataFrame(data=clusterer.labels_, index=X.index, columns=['cluster'])
         
         
         
