@@ -11,16 +11,14 @@ import pandas as pd
 
 from metric_learn import MMC
 from sklearn.metrics import f1_score
-from datetime import date, datetime
 from types import SimpleNamespace
 from sklearn.utils import check_array
 from sklearn.pipeline import Pipeline
+from datetime import date, time, datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.base import BaseEstimator, TransformerMixin
 
-
-from eensight.preprocessing.utils import DateFeatureTransformer
 
 
 def get_matrix_profile(X: pd.Series, window=24) -> pd.DataFrame:
@@ -85,14 +83,20 @@ def find_prototypes(X, mp, start_time, end_time=None,
 
     if start_time == end_time:
         end_time = None 
+
     
     time_step = X.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
     
     if end_time is not None:
-        date_diff = (datetime.combine(date.today(), end_time) 
-                    - datetime.combine(date.today(), start_time)
-        )
+        if end_time == time(0, 0):
+            date_diff = (datetime.combine(date.today() + timedelta(days=1), end_time) 
+                        - datetime.combine(date.today(), start_time)
+            ) 
+        else:
+            date_diff = (datetime.combine(date.today(), end_time) 
+                        - datetime.combine(date.today(), start_time)
+            )
         m = int(date_diff.total_seconds() * steps_per_hour / 3600)
     else:
         m = 24 * steps_per_hour
@@ -197,6 +201,59 @@ def create_mmc_pairs(distances, pairs_per_prototype=100):
     return pairs
 
 
+class DateFeatureTransformer(TransformerMixin, BaseEstimator):
+    """
+    Parameters
+    ----------
+    copy_X : bool, default=True
+        If True, X will be copied; else, it may be overwritten.
+    remainder : str, :type : {'drop', 'passthrough'}, default='drop'
+        By specifying ``remainder='passthrough'``, all remaining columns will be 
+        automatically passed through. This subset of columns is concatenated with 
+        the output of the transformer.
+    """
+
+    def __init__(self, copy_X=True, remainder='drop'):
+        if remainder not in ('passthrough', 'drop'):
+            raise ValueError('Parameter "remainder" should be "passthrough" or "drop"')
+        self.copy_X = copy_X 
+        self.remainder = remainder
+    
+    def fit(self, X, y=None):
+        return self 
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError('This function expects pd.DataFrame as an input')
+
+        if self.copy_X:
+            X = X.copy()
+
+        index_dtype = X.index.dtype
+        if isinstance(index_dtype, pd.core.dtypes.dtypes.DatetimeTZDtype):
+            index_dtype = np.datetime64
+        if not np.issubdtype(index_dtype, np.datetime64):
+            X.index = pd.to_datetime(X.index, infer_datetime_format=True)
+
+        attr = ['month', 'week', 'dayofweek']
+        time_step = X.index.to_series().diff().min()
+        if time_step < pd.Timedelta(days=1): 
+            attr = attr + ['hour', 'minute']
+    
+        week = (X.index.isocalendar().week.astype(X.index.day.dtype) 
+                if hasattr(X.index, 'isocalendar') 
+                else X.index.week)
+        
+        if self.remainder == 'passthrough':
+            for n in attr: 
+                X.insert(len(X.columns), n, getattr(X.index, n) if n != 'week' else week)
+        else:
+            X = pd.DataFrame.from_dict(
+                {n: (getattr(X.index, n) if n != 'week' else week) for n in attr}
+            )
+        return X 
+
+
 class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
     def __init__(self, month_col=None, day_of_week_col=None):
         self.month_col = month_col or 'month'
@@ -207,25 +264,27 @@ class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):        
-        if not isinstance(X.index, pd.DatetimeIndex):
-            X.index = pd.to_datetime(X.index)
+        index_dtype = X.index.dtype
+        if isinstance(index_dtype, pd.core.dtypes.dtypes.DatetimeTZDtype):
+            index_dtype = np.datetime64
+        if not np.issubdtype(index_dtype, np.datetime64):
+            X.index = pd.to_datetime(X.index, infer_datetime_format=True)
         
         X = pd.DataFrame(data=check_array(X), index=X.index, columns=X.columns)
-        X = X.resample('1D').first()
+        X = X.groupby(lambda x: x.date).first()
+        X.index = X.index.map(pd.to_datetime)
         
-        features = pd.DataFrame(0, index=X.index, columns=range(19))
+        features = pd.DataFrame(0, index=X.index, columns=range(1, 20))
         
         temp = pd.get_dummies(X[self.month_col].astype(int))
-        temp.index = X.index
         for col in temp.columns:
-            features[col-1] = features[col-1].mask(temp[col]==1, other=1)
+            features[col] = temp[col]
 
         temp = pd.get_dummies(X[self.day_of_week_col].astype(int))
-        temp.index = X.index
         for col in temp.columns:
-            features[col+12] = features[col+12].mask(temp[col]==1, other=1)
+            features[col+13] = temp[col]
 
-        return pd.DataFrame(data=features, index=X.index)
+        return features
 
 
 def learn_distance_metric(distances, pairs_per_prototype=100, 

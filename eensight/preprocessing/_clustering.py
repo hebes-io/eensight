@@ -3,8 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import logging
-
 import numpy as np
 import pandas as pd
 
@@ -13,17 +11,29 @@ from hdbscan import HDBSCAN
 from collections import OrderedDict
 from sklearn.utils import check_array
 from scipy.spatial.distance import cdist
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.utils.validation import check_is_fitted
-from sklearn.base import ClusterMixin, ClassifierMixin
+from sklearn.utils.validation import _deprecate_positional_args
 
 from eensight.base import _BaseHeterogeneousEnsemble
 
 
-logger = logging.getLogger(__file__)
-logger.setLevel(logging.INFO)
-
 NOISE = -1
+
+DEFAULT_HDBSCAN_PARAMS = {
+        'min_cluster_size' : 5, 
+        'min_samples' : None, 
+        'cluster_selection_epsilon' : 0.0, 
+        'metric' : 'euclidean', 
+        'alpha' : 1.0, 
+        'p' : None, 
+        'algorithm' : 'best', 
+        'leaf_size' : 40, 
+        'memory' : Memory(location=None), 
+        'approx_min_span_tree' : True, 
+        'gen_min_span_tree' : False, 
+        'core_dist_n_jobs' : 4, 
+        'cluster_selection_method' : 'eom', 
+        'allow_single_cluster' : False,
+}
 
 
 class RankedPoints:
@@ -34,12 +44,9 @@ class RankedPoints:
         
         Parameters
         ----------
-        
         points : array of shape (n_samples, n_features), and must be the same data passed into
                  HDBSCAN
-        
         clusterer : Instance of HDBSCAN that has been fit to data
-        
         metric: string or callable, optional (default='euclidean')
             The metric to use when calculating distance between points in a cluster and 
             the cluster centroid/medoid. If metric is a string or callable, it must be one of
@@ -88,14 +95,12 @@ class RankedPoints:
         
         Parameters
         ----------
-
         cluster_id : int
             The id of the cluster to compute the distances for. If the cluster id is -1 which
             corresponds to the noise point cluster, then this will return a distance of NaN.
 
         Returns
         -------
-
         df : A pandas DataFrame containing the distances from each point to the cluster centroid/medoid.
              The index of the dataframe corresponds to the index in the original data. 
 
@@ -149,9 +154,8 @@ class RankedPoints:
 
 
 
-class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble):
-    """ A wrapper around HDBSCAN models that uses a sklearn.neighbors.KNeighborsClassifier 
-    to predict the cluster for unseen inputs.
+class Clusterer(_BaseHeterogeneousEnsemble):
+    """ A wrapper around HDBSCAN models.
         
     Parameters
     ----------
@@ -226,144 +230,45 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         Exemplars are members of the input set that are representative of their clusters.
     exemplar_size: int, optional (default=4)
         The number of exemplars to store 
-    n_neighbors : int, default=5
-        Number of neighbors to use by default for :meth:`kneighbors` queries.
-    weights : {'uniform', 'distance'} or callable, default='uniform'
-        weight function used in prediction.  Possible values:
-        - 'uniform' : uniform weights.  All points in each neighborhood
-          are weighted equally.
-        - 'distance' : weight points by the inverse of their distance.
-          in this case, closer neighbors of a query point will have a
-          greater influence than neighbors which are further away.
-        - [callable] : a user-defined function which accepts an
-          array of distances, and returns an array of the same shape
-          containing the weights.
     """
-    def __init__(self, min_cluster_size=5, 
-                       min_samples=None, 
-                       cluster_selection_epsilon=0.0, 
-                       metric='euclidean', 
-                       alpha=1.0, 
-                       p=None, 
-                       algorithm='best', 
-                       leaf_size=40, 
-                       memory=Memory(location=None), 
-                       approx_min_span_tree=True, 
-                       gen_min_span_tree=False, 
-                       core_dist_n_jobs=4, 
-                       cluster_selection_method='eom', 
-                       allow_single_cluster=False,
-                       ignored_index=None,
-                       exemplar_size=4,
-                       n_neighbors=5,
-                       weights='distance'):
-        
-        self.min_cluster_size = min_cluster_size
-        self.min_samples = min_samples
-        self.alpha = alpha
-        self.cluster_selection_epsilon = cluster_selection_epsilon
-        self.metric = metric
-        self.p = p
-        self.algorithm = algorithm
-        self.leaf_size = leaf_size
-        self.memory = memory
-        self.approx_min_span_tree = approx_min_span_tree
-        self.gen_min_span_tree = gen_min_span_tree
-        self.core_dist_n_jobs = core_dist_n_jobs
-        self.cluster_selection_method = cluster_selection_method
-        self.allow_single_cluster = allow_single_cluster
+    @_deprecate_positional_args
+    def __init__(self, ignored_index=None, exemplar_size=4, **params):
         self.ignored_index = ignored_index
         self.exemplar_size = exemplar_size
-        self.n_neighbors = n_neighbors
-        self.weights = weights
+        # Duplicates are resolved in favor of the value in params
+        self._estimator_params = dict(DEFAULT_HDBSCAN_PARAMS, **params)
+        self.estimators = [('estimator', HDBSCAN(**self._estimator_params))] 
         
-        self.estimators = [
-            ('clusterer', HDBSCAN(min_cluster_size=min_cluster_size,
-                                  min_samples=min_samples,
-                                  alpha=alpha,
-                                  cluster_selection_epsilon=cluster_selection_epsilon,
-                                  metric=metric,
-                                  p=p,
-                                  algorithm=algorithm,
-                                  leaf_size=leaf_size,
-                                  memory=memory,
-                                  approx_min_span_tree=approx_min_span_tree,
-                                  gen_min_span_tree=gen_min_span_tree,
-                                  core_dist_n_jobs=core_dist_n_jobs,
-                                  cluster_selection_method=cluster_selection_method,
-                                  allow_single_cluster=allow_single_cluster)
-            ), 
-            ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors, 
-                                                metric=metric, 
-                                                weights=weights)
-            )
-        ]
         
-
     def fit(self, X, y=None):
-        X = pd.DataFrame(data=check_array(X), 
-                         index=X.index, 
-                         columns=X.columns)
+        X = pd.DataFrame(data=check_array(X), index=X.index, columns=X.columns)
+
+        estimator = self.named_estimators['estimator']
+        estimator.fit(X)
         
-        clusterer = self.named_estimators['clusterer']
-        labels = clusterer.fit_predict(X)
-        
-        self.probabilities_ = pd.DataFrame(
-                    data=clusterer.probabilities_,
-                    columns=['probability'],
-                    index=X.index
+        self.labels_ = pd.DataFrame(data=estimator.labels_, 
+                                    index=X.index, 
+                                    columns=['label']
         )
-        self.coverage_ = len(np.unique(X.index.dayofyear)) / 365
-        ranked_points = RankedPoints(X, clusterer, metric=self.metric, 
+        self.probabilities_ = pd.DataFrame(data=estimator.probabilities_, 
+                                           index=X.index, 
+                                           columns=['probability']
+        )
+        self.year_coverage_ = len(np.unique(X.index.dayofyear)) / 365
+        
+        ranked_points = RankedPoints(X, estimator, metric=estimator.metric, 
                                                    selection_method='medoid',
                                                    ignored_index=self.ignored_index)
         self.exemplars_ = OrderedDict()
-        for cat in sorted(np.unique(labels)):
+        for cat in sorted(np.unique(estimator.labels_)):
             if cat == NOISE:
                 continue 
             else:
-                self.exemplars_[cat] = ranked_points.get_closest_samples_for_cluster(
-                                            cat, n_samples=self.exemplar_size).index
-        
-        classifier = self.named_estimators['classifier']
-        labels = self.labels_[self.labels_['label'] != NOISE]['label']
-        X = X[X.index.isin(labels.index)]
-        classifier.fit(X, labels)
+                self.exemplars_[cat] = ranked_points.get_closest_samples_for_cluster(cat, 
+                                                        n_samples=self.exemplar_size
+                                        ).index
         self.fitted_ = True
         return self 
-
-
-    def predict(self, X):
-        check_is_fitted(self, 'fitted_')  
-        X = pd.DataFrame(data=check_array(X), 
-                         index=X.index, 
-                         columns=X.columns)
-
-        classifier = self.named_estimators['classifier']
-        
-        if (self.coverage_ > 0.9) and (classifier.get_params()['n_neighbors'] > 1):
-            classifier.set_params(**{'n_neighbors': 1})
-            logger.info(f'Coverage is large enough to use n_neighbors=1')
-        
-        return pd.DataFrame(data=classifier.predict(X), index=X.index, columns=['cluster'])
-
-
-    def predict_proba(self, X):
-        """Return probability estimates for the test data X.
-        """
-        check_is_fitted(self, 'fitted_')  
-        X = pd.DataFrame(data=check_array(X), 
-                         index=X.index, 
-                         columns=X.columns)
-
-        classifier = self.named_estimators['classifier']
-        if (self.coverage_ > 0.9) and (classifier.get_params()['n_neighbors'] > 1):
-            classifier.set_params({'n_neighbors': 1})
-            logger.info(f'Coverage is large enough to use n_neighbors=1')
-
-        return pd.DataFrame(data=classifier.predict_proba(X), 
-                            index=X.index,
-                            columns=classifier.classes_)
 
 
     def fit_predict(self, X, y=None):
@@ -371,8 +276,7 @@ class ClusterPredictor(ClusterMixin, ClassifierMixin, _BaseHeterogeneousEnsemble
         Perform clustering on `X` and returns cluster labels.
         """
         self.fit(X)
-        clusterer = self.named_estimators['clusterer']
-        return pd.DataFrame(data=clusterer.labels_, index=X.index, columns=['cluster'])
+        return self.labels_
         
         
         
