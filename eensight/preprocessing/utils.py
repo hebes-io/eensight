@@ -46,4 +46,6 @@ def as_list(val):
         return [val]
     if hasattr(val, "__iter__"):
         return list(val)
+    if val is None:
+        return []
     return [val]

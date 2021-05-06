@@ -10,9 +10,8 @@ import numpy as np
 import pandas as pd 
 
 from metric_learn import MMC
-from sklearn.metrics import f1_score
 from types import SimpleNamespace
-from sklearn.utils import check_array
+from sklearn.metrics import f1_score
 from sklearn.pipeline import Pipeline
 from datetime import date, time, datetime, timedelta
 from sklearn.model_selection import train_test_split
@@ -270,7 +269,6 @@ class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
         if not np.issubdtype(index_dtype, np.datetime64):
             X.index = pd.to_datetime(X.index, infer_datetime_format=True)
         
-        X = pd.DataFrame(data=check_array(X), index=X.index, columns=X.columns)
         X = X.groupby(lambda x: x.date).first()
         X.index = X.index.map(pd.to_datetime)
         

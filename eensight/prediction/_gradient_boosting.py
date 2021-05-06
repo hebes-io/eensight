@@ -26,7 +26,7 @@ DEFAULT_CB_PARAMS = {
 
 
 
-class Regressor(_BaseHeterogeneousEnsemble):
+class GBRegressor(_BaseHeterogeneousEnsemble):
     @_deprecate_positional_args
     def __init__(self, **params):
         self.cat_features = params.pop('cat_features', [])
@@ -62,7 +62,7 @@ class Regressor(_BaseHeterogeneousEnsemble):
         estimator = self.named_estimators['estimator']
         pred = estimator.predict(Pool(data=X, cat_features=self.cat_features))
         if isinstance(X, (pd.DataFrame, pd.Series)):
-            return pd.DataFrame(data=pred, columns=[self.target_name_], index=X.index)
+            return pd.Series(data=pred, name=self.target_name_, index=X.index)
         else:
             return pred
     

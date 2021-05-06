@@ -1,4 +1,4 @@
 
+from ._gradient_boosting import GBRegressor 
 from ._seasonal import SeasonalPredictor, seasonal_predict
-from ._composite import ClusterPredictor, ConsumptionPredictor
-from ._gradient_boosting import Regressor 
+from ._composite import ClusterPredictor, LinearPredictor, BoostPredictor
