@@ -34,7 +34,7 @@ def get_matrix_profile(X: pd.Series, window=24) -> pd.DataFrame:
     return profile # matrix profile
 
 
-def get_days_to_ignore(X, start_time, end_time, threshold=0.3):
+def get_days_to_ignore(X, start_time, end_time=None, threshold=0.3):
     if isinstance(X, pd.DataFrame) and (X.shape[1] > 1):
         X = X[X.filter(like='imputed').columns]
         if X.shape[1] > 1:
@@ -47,9 +47,15 @@ def get_days_to_ignore(X, start_time, end_time, threshold=0.3):
     if not np.all(X.isin([True, False])):
         raise ValueError('Found non-boolean values in input data')
 
-    should_ignore = (X.between_time(start_time, end_time, include_end=False)
-                      .groupby(lambda x: x.date)
-                      .mean() > threshold)
+    if start_time == end_time:
+        end_time = None 
+
+    if end_time is None:
+        should_ignore = X.groupby(lambda x: x.date).mean() > threshold 
+    else:
+        should_ignore = (X.between_time(start_time, end_time, include_end=False)
+                        .groupby(lambda x: x.date)
+                        .mean() > threshold)
     
     return should_ignore[should_ignore].index
 
@@ -83,7 +89,6 @@ def find_prototypes(X, mp, start_time, end_time=None,
     if start_time == end_time:
         end_time = None 
 
-    
     time_step = X.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
     
@@ -200,6 +205,62 @@ def create_mmc_pairs(distances, pairs_per_prototype=100):
     return pairs
 
 
+def learn_distance_metric(distances, pairs_per_prototype=100, 
+                                     test_size=0.5, 
+                                     return_features=False,
+                                     return_pairs=False):
+    feature_pipeline = Pipeline([
+        ('dates', DateFeatureTransformer()),
+        ('features', MMCFeatureTransformer()),
+    ])
+    
+    features = feature_pipeline.fit_transform(distances)
+    pairs = create_mmc_pairs(distances, pairs_per_prototype=pairs_per_prototype)
+    
+    X_train, X_test, y_train, y_test = train_test_split(pairs[:, :2], pairs[:, -1], 
+                shuffle=True, stratify=pairs[:, -1], test_size=test_size
+    )
+
+    mmc = MMC(preprocessor=np.array(features, dtype=np.float))
+    mmc = mmc.fit(X_train, y_train)
+    score = f1_score(y_test, mmc.predict(X_test), average='weighted')
+    return SimpleNamespace(
+        score=score,
+        metric_components=mmc.components_.transpose(),
+        features=None if not return_features else features,
+        pairs=None if not return_pairs else pairs 
+    )
+
+
+def metric_function(components, u, v, squared=False):
+      """This function computes the metric between u and v, according to a
+      learned metric.
+      
+      Parameters
+      ----------
+      components : numpy.ndarray
+        The linear transformation `deduced from the learned Mahalanobis
+        metric
+      u : array-like, shape=(n_features,)
+        The first point involved in the distance computation.
+      v : array-like, shape=(n_features,)
+        The second point involved in the distance computation.
+      squared : bool
+        If True, the function will return the squared metric between u and
+        v, which is faster to compute.
+      
+      Returns
+      -------
+      distance : float
+        The distance between u and v according to the new metric.
+      """
+      transformed_diff = (u - v).dot(components)
+      dist = np.dot(transformed_diff, transformed_diff.T)
+      if not squared:
+        dist = np.sqrt(dist)
+      return dist
+    
+    
 class DateFeatureTransformer(TransformerMixin, BaseEstimator):
     """
     Parameters
@@ -269,9 +330,6 @@ class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
         if not np.issubdtype(index_dtype, np.datetime64):
             X.index = pd.to_datetime(X.index, infer_datetime_format=True)
         
-        X = X.groupby(lambda x: x.date).first()
-        X.index = X.index.map(pd.to_datetime)
-        
         features = pd.DataFrame(0, index=X.index, columns=range(1, 20))
         
         temp = pd.get_dummies(X[self.month_col].astype(int))
@@ -281,63 +339,4 @@ class MMCFeatureTransformer(TransformerMixin, BaseEstimator):
         temp = pd.get_dummies(X[self.day_of_week_col].astype(int))
         for col in temp.columns:
             features[col+13] = temp[col]
-
         return features
-
-
-def learn_distance_metric(distances, pairs_per_prototype=100, 
-                                     test_size=0.5, 
-                                     return_features=False,
-                                     return_pairs=False):
-    feature_pipeline = Pipeline([
-        ('dates', DateFeatureTransformer()),
-        ('features', MMCFeatureTransformer()),
-    ])
-    
-    features = feature_pipeline.fit_transform(distances)
-    pairs = create_mmc_pairs(distances, pairs_per_prototype=pairs_per_prototype)
-    
-    X_train, X_test, y_train, y_test = train_test_split(pairs[:, :2], pairs[:, -1], 
-                shuffle=True, stratify=pairs[:, -1], test_size=test_size
-    )
-
-    mmc = MMC(preprocessor=np.array(features, dtype=np.float))
-    mmc = mmc.fit(X_train, y_train)
-    score = f1_score(y_test, mmc.predict(X_test), average='weighted')
-    return SimpleNamespace(
-        score=score,
-        metric_components=mmc.components_.transpose(),
-        features=None if not return_features else features,
-        pairs=None if not return_pairs else pairs 
-    )
-
-
-def metric_function(components, u, v, squared=False):
-      """This function computes the metric between u and v, according to a
-      learned metric.
-      
-      Parameters
-      ----------
-      components : numpy.ndarray
-        The linear transformation `deduced from the learned Mahalanobis
-        metric
-      u : array-like, shape=(n_features,)
-        The first point involved in the distance computation.
-      v : array-like, shape=(n_features,)
-        The second point involved in the distance computation.
-      squared : bool
-        If True, the function will return the squared metric between u and
-        v, which is faster to compute.
-      
-      Returns
-      -------
-      distance : float
-        The distance between u and v according to the new metric.
-      """
-      transformed_diff = (u - v).dot(components)
-      dist = np.dot(transformed_diff, transformed_diff.T)
-      if not squared:
-        dist = np.sqrt(dist)
-      return dist
-    
-    

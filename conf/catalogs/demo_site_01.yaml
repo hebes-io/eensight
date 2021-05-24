@@ -1,0 +1,60 @@
+data_dir: ???
+
+site_name: demo_site_01
+
+rebind_names:
+  consumption : null
+  temperature : null 
+  holiday     : null 
+  timestamp   : null
+
+datasets:
+  raw:
+    consumption:
+      type          : eensight.io.pandas.CSVDataSet
+      file_name     : consumption.csv
+      load_args:
+        sep         : ','
+      save_args:
+        sep         : ','
+      stages:
+        - train
+        - test
+
+    temperature:
+      type          : eensight.io.pandas.CSVDataSet
+      file_name     : temperature.csv
+      load_args:
+        sep         : ','
+      save_args:
+        sep         : ','
+      stages:
+        - train
+        - test
+
+    holidays:
+      type          : eensight.io.pandas.CSVDataSet
+      file_name     : holidays.csv
+      load_args:
+        sep         : ','
+      save_args:
+        sep         : ','
+      stages:
+        - train
+        - test
+
+  intermediate:
+    merged_data:
+      type          : eensight.io.pandas.CSVDataSet
+      file_name     : merged_data.csv
+      load_args:
+        index_col   : 0
+        parse_dates : true
+      save_args     : null
+      stages:
+        - train
+        - test
+
+
+
+

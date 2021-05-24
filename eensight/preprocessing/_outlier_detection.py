@@ -9,12 +9,14 @@ import pandas as pd
 import scipy.stats as stats
 
 
-def global_filter(X: pd.Series, no_change_window: int=4,
-                                min_value: float=None, 
-                                max_value: float=None, 
-                                allow_zero: bool=False, 
-                                allow_negative: bool=False,
-                                copy=True) -> pd.Series:
+
+def global_filter(X: pd.Series, 
+                  no_change_window: int=3,
+                  min_value: float=None, 
+                  max_value: float=None, 
+                  allow_zero: bool=False, 
+                  allow_negative: bool=False,
+                  copy=True) -> pd.Series:
     
     if not isinstance(X, pd.Series):
         raise ValueError('Input data is expected of pd.Series type')
@@ -24,10 +26,10 @@ def global_filter(X: pd.Series, no_change_window: int=4,
     
     time_step = X.index.to_series().diff().min()
     steps_per_hour = math.ceil(pd.Timedelta('1H') / time_step)
+    start = int(no_change_window * steps_per_hour)
 
     changes = X.diff().abs()
-    threshold = 1e-3 * changes.max() * no_change_window * steps_per_hour
-    X = X.mask(changes.rolling(f'{no_change_window}H').sum() < threshold, np.nan)
+    X[start:] = X[start:].mask(changes.rolling(f'{no_change_window}H').sum() < 1e-3, np.nan)
      
     if min_value is not None:
         X.loc[X<min_value] = np.nan
