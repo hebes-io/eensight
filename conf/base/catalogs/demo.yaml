@@ -1,0 +1,76 @@
+
+site_name : demo
+versioned : false
+
+location:
+  country   : null  
+  province  : null 
+  state     : null 
+
+rebind_names:
+  consumption : null
+  temperature : null 
+  holiday     : null 
+  timestamp   : null
+
+sources:
+  train.root_input:
+    type: ${globals:types.multiple}
+    path: ${globals:data_root}/${site_name}/${globals:folders.raw}/train
+    dataset:
+      type: ${globals:types.csv}
+      load_args:
+        sep: ','
+        index_col: 0
+    filename_suffix: '.csv'
+
+  test.root_input:
+    type: ${globals:types.multiple}
+    path: ${globals:data_root}/${site_name}/${globals:folders.raw}/test
+    dataset:
+      type: ${globals:types.csv}
+      load_args:
+        sep: ','
+        index_col: 0
+    filename_suffix: '.csv'
+  
+  train.preprocessed_data:
+    type: ${globals:types.csv}
+    filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/train/preprocessed.csv
+    load_args:
+      sep: ','
+      index_col : 0
+      parse_dates : 
+        - 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+
+  test.preprocessed_data:
+    type: ${globals:types.csv}
+    filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/test/preprocessed.csv
+    load_args:
+      sep: ','
+      index_col : 0
+      parse_dates :
+        - 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+
+  train.distance_metrics:
+    type: ${globals:types.pickle}
+    filepath: ${globals:data_root}/${site_name}/${globals:folders.primary}/train/distance_metrics.pickle
+    versioned : ${versioned}
+
+  train.day_types:
+    type: ${globals:types.csv}
+    filepath: ${globals:data_root}/${site_name}/${globals:folders.report}/train/day_types.csv
+    load_args:
+      sep: ','
+      index_col : 0
+      parse_dates :
+        - 0
+    save_args:
+      index: true
+    versioned : ${versioned}

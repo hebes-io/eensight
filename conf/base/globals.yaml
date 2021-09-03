@@ -1,0 +1,17 @@
+
+data_root : data
+
+types:
+  csv      : pandas.CSVDataSet
+  multiple : PartitionedDataSet
+  pickle   : pickle.PickleDataSet
+
+folders:
+  raw           : 01_raw
+  intermediate  : 02_intermediate
+  primary       : 03_primary
+  feature       : 04_feature
+  model_input   : 05_model_input
+  model         : 06_models
+  model_output  : 07_model_output
+  report        : 08_reporting

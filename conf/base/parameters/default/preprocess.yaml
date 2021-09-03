@@ -1,0 +1,43 @@
+# parameters for the `preprocess` pipeline
+
+find_outliers_for: 
+  - consumption
+  - temperature
+
+global_filter:
+  consumption:
+    no_change_window: 3
+    min_value: null 
+    max_value: null
+    allow_zero: false
+    allow_negative: false
+  temperature:
+    no_change_window: 3
+    min_value: null 
+    max_value: null
+    allow_zero: true
+    allow_negative: true
+
+decompose_consumption:
+  trend: ct 
+  alpha: 0.1
+  missing: drop
+  return_conditions: false
+  return_model: false
+
+decompose_temperature:
+  trend: c
+  alpha: 0.1
+  missing: drop
+  return_model: false
+
+global_outlier_detect:
+  c: 5
+
+local_outlier_detect:
+  min_samples: 0.6 
+  c: 5
+
+linear_impute:
+  temperature:
+    window: 6
