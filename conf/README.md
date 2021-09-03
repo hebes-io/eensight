@@ -98,4 +98,137 @@ train.preprocessed_data:
     versioned : ${versioned}
  ```
 
+## Model configurations
+
+`eensight` is built around ensembles of localized linear regreesion models. The structure of these base models (main effects and pairwise interactions) can be defined using YAML files: 
+
+```yaml
+regressors:
+  month:           # the name of the regressor
+    feature: month # the name of the feature to use and encode so that to create the regressor 
+    type: categorical
+    max_n_categories: null
+    encode_as: onehot 
+    interaction_only: false
+  
+  tow:
+    feature: hourofweek
+    type: categorical
+    max_n_categories: null 
+    stratify_by: null 
+    excluded_categories: null 
+    unknown_value: null
+    min_samples_leaf: null  
+    max_features: null 
+    encode_as: onehot 
+    interaction_only: false
+  
+  temperature:
+    feature: temperature
+    type: linear
+    include_bias: false
+
+interactions:
+  tow, temperature:
+    tow:
+      max_n_categories: 5
+      stratify_by: temperature 
+      min_samples_leaf: 20
+    temperature:
+      type: spline
+      n_knots: 4
+      degree: 2
+      strategy: quantile
+      extrapolation: constant
+```
+
+## Parameter values
+
+`eensight` pipelines get their parameter settings for YAML files in the conf/base/parameters directory.
+
+```
+conf
+│   README.md 
+│
+└───base
+│   │   globals.yaml
+│   │   logging.yaml
+│   │
+│   └── parameters
+│       └── default
+│           │   preprocess.yaml
+│           │   ...
+```
+
+Parameters are accessed and treated exactly as prescribed by the Kedro documentation: https://kedro.readthedocs.io/en/stable/04_kedro_project_setup/02_configuration.html#parameters 
+
+## Run command arguments
+
+The primary way of using `eensight` is through the command line:
+
+<code>python -m eensight </code>
+
+The command line functionality uses the [Hydra framework](https://hydra.cc/), which can dynamically create a hierarchical configuration by composition and override it through config files and the command line.
+
+```python
+from .settings import DEFAULT_CATALOG, DEFAULT_MODEL, DEFAULT_PARAMETERS, PROJECT_PATH
+
+@hydra.main(config_path="hydra", config_name="run_config")
+def run(cfg: DictConfig):
+    cfg = OmegaConf.to_container(cfg)
+
+    runner = cfg.get("runner") or "SequentialRunner"
+    runner_class = load_obj(runner, "kedro.runner")
+
+    parameters = cfg.get("parameter_config") or DEFAULT_PARAMETERS
+    catalog = cfg.get("catalog_config") or DEFAULT_CATALOG
+    model = cfg.get("model_config") or DEFAULT_MODEL
+    ...
+```
+
+
+The `run_config.yaml` file includes all the availabe command line options:
+
+```yaml
+# The name of the catalog configuration file to load
+catalog : null 
+# The name of the model configuration file to load
+model : null
+# The name of the parameters configuration file to load
+parameters : null 
+#Name of the modular pipeline to run. If not set, the project pipeline is run 
+# by default
+pipeline : null 
+# Specify a runner that you want to run the pipeline with.
+# Available runners: `SequentialRunner`, `ParallelRunner` and `ThreadRunner`
+# If not set, `SequentialRunner` will be used.
+runner : null 
+# Load and save node inputs and outputs asynchronously with threads. 
+# If not specified, load and save datasets synchronously
+async : False
+# Kedro configuration environment name. Defaults to `local`.
+env: null 
+# A list of dataset names which should be used as a starting point
+from_inputs : null 
+# A list of dataset names which should be used as an end point
+to_outputs : null 
+# A list of node names which should be used as a starting point
+from_nodes : null 
+# A list of node names which should be used as an end point
+to_nodes : null 
+# A list with node names. The `run` function will run only the nodes with 
+# specified names
+nodes : null 
+# List of tags. Construct a pipeline from nodes having any of these tags
+tags : null
+# A mapping between dataset names and versions to load. Has no effect on 
+# data sets without enabled versioning. 
+load_versions : null
+# Specify extra parameters that you want to pass to the context initializer. 
+# The value of these parameters will override the values in the `parameters`
+# configuration file
+params : null 
+```
+
+`eensight` uses its onw `CustomContext` (that extends `KedroContext`) so that the selected catalog, model and parameter configuration files are passed to the `OmegaConfigLoader`.
  
