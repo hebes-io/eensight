@@ -68,9 +68,6 @@ def get_categorical_cols(X, int_is_categorical=True):
 
 
 def get_datetime_data(X, col_name=None):
-    if not isinstance(X, (pd.Series, pd.DataFrame)):
-        raise ValueError("Input values are expected as pandas Series or DataFrames.")
-
     if col_name is not None:
         dt_column = X[col_name]
     else:
@@ -81,7 +78,6 @@ def get_datetime_data(X, col_name=None):
         col_dtype = np.datetime64
     if not np.issubdtype(col_dtype, np.datetime64):
         dt_column = pd.to_datetime(dt_column, infer_datetime_format=True)
-
     return dt_column
 
 

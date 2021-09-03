@@ -155,7 +155,7 @@ conf
 │   │   logging.yaml
 │   │
 │   └── parameters
-│       └── default
+│       ├── default
 │           │   preprocess.yaml
 │           │   ...
 ```
