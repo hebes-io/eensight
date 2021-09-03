@@ -8,7 +8,7 @@ The configuration functionality of `eensight` builds on top of the configuration
 One of the changes that `eensight` has introduced to the `Kedro` approach is a custom `ConfigLoader` that utilizes [`OmegaConf`](https://github.com/omry/omegaconf) as the backend. This makes it easy to use [variable interpolation](https://omegaconf.readthedocs.io/en/latest/usage.html#variable-interpolation) when writting the configuration files. As an example, the `globals.yaml` file contains values that can be reused in other files:  
 
 *globals.yaml:*
-```erlang
+```yaml
 data_root : data
 
 types:
