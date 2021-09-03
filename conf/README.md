@@ -1,14 +1,7 @@
-# What is this for?
+<img src="https://raw.githubusercontent.com/hebes-io/eensight/master/logo.png" alt="grouped" width="150" align="left"/>
+</br></br>
 
-This folder should be used to store configuration files used by `eensight`.
+# The configuration approach
 
-## Base configuration
-
-The `base` folder is for shared configuration, such as non-sensitive and project-related configuration. 
-WARNING: Please do not put access credentials in the base configuration folder.
-
-## Local configuration
-The `local` folder should be used for configuration that is either user-specific (e.g. IDE configuration) or protected (e.g. security keys).
-
-> *Note:* Please do not check in any local configuration to version control.
+The configuration functionality of `eensight` builds on top of the configuration functionality provided by [`Kedro`](https://github.com/quantumblacklabs/kedro). 
 
