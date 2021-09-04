@@ -10,6 +10,7 @@ from kedro.framework.context.context import _convert_paths_to_absolute_posix
 from kedro.io import DataCatalog
 
 from eensight.config import OmegaConfigLoader
+from eensight.framework.context.validation import parse_model_config
 from eensight.settings import CONF_ROOT, PROJECT_PATH
 
 
@@ -50,19 +51,20 @@ def load_catalog(catalog, model=None, parameters=None, env="local"):
     catalog.add_feed_dict(dict(location=location))
 
     if model is not None:
-        model = config_loader.get(
+        conf_model = config_loader.get(
             f"models/{model}*", f"models/{model}*/**", f"**/models/{model}*"
         )
-        catalog.add_feed_dict(dict(models=model))
+        model_structure = parse_model_config(conf_model)
+        catalog.add_feed_dict(dict(model=model_structure))
 
     if parameters is not None:
-        parameters = config_loader.get(
+        conf_params = config_loader.get(
             f"parameters/{parameters}*",
             f"parameters/{parameters}*/**",
             f"**/parameters/{parameters}*",
         )
-        catalog.add_feed_dict(dict(parameters=parameters))
-        params = pd.json_normalize(parameters, sep=".")
+        catalog.add_feed_dict(dict(parameters=conf_params))
+        params = pd.json_normalize(conf_params, sep=".")
         params = params.rename(columns={col: "params:" + col for col in params.columns})
         catalog.add_feed_dict(params.to_dict(orient="records")[0])
 

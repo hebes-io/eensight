@@ -1,14 +1,11 @@
-<img src="https://raw.githubusercontent.com/hebes-io/eensight/master/logo.png" alt="grouped" width="150" align="left"/>
-</br></br>
-
 # The configuration approach
 
 The configuration functionality of `eensight` builds on top of the configuration functionality provided by [`Kedro`](https://github.com/quantumblacklabs/kedro). 
 
-One of the changes that `eensight` has introduced to the `Kedro` approach is a custom `ConfigLoader` that utilizes [`OmegaConf`](https://github.com/omry/omegaconf) as the backend. This makes it easy to use [variable interpolation](https://omegaconf.readthedocs.io/en/latest/usage.html#variable-interpolation) when writting the configuration files. As an example, the `globals.yaml` file contains values that can be reused in other files:  
+One of the changes that `eensight` has introduced to the `Kedro` approach is a custom `ConfigLoader` (`eensight.config.OmegaConfigLoader`) that utilizes [`OmegaConf`](https://github.com/omry/omegaconf) as the backend. This makes it easy to use [variable interpolation](https://omegaconf.readthedocs.io/en/latest/usage.html#variable-interpolation) when writting the configuration files. As an example, the `globals.yaml` file contains values that can be reused in other files:  
 
 *globals.yaml:*
-```erlang
+```yaml
 data_root : data
 
 types:
@@ -27,8 +24,8 @@ folders:
   report       : 08_reporting
 ```
 
-... and then *some_catalog.yaml:*
-```erlang
+... and then in *some_catalog.yaml:*
+```yaml
 site_name : demo
 
 sources:
@@ -56,63 +53,61 @@ Data catalogs are a way to describe the different datasets that are consumed and
 
 - The name of the building/site
 
-- Its location (this information is used for automatically generating holiday information),  
+```yaml
+site_name : demo
+```
+
+- Its location (this information is used for automatically generating holiday information) 
+
+```yaml
+location:
+  country   : null  
+  province  : null 
+  state     : null 
+```
 
 - A mapping between specific feature names that the `eensight` functionality expects (consumption, temperature, holiday, timestamp) and the actual names used in the catalog's datasets
 
+```yaml
+rebind_names:
+  consumption : null
+  temperature : null 
+  holiday     : null 
+  timestamp   : null
+```
+
 - The different data sources consumed and produced by `eensight`. The information that is necessary to adequately describe a data source can be found at Kedro's documentation: https://kedro.readthedocs.io/en/stable/05_data/01_data_catalog.html    
+
+### Namespaces
 
 `eensight` supports three namespaces: `train`, `test` and `post`. 
 
-`train` concerns the pre-intervention data and the pipelines that are used for building, optimizing, cross-validating and adding uncertainty information to models that predict baseline energy consumption. 
+`train` refers to the pre-intervention data and the pipelines that are used for building, optimizing, cross-validating and adding uncertainty information to models that predict baseline energy consumption. 
 
-`test` concerns pre-intervention data that the baseline model did not see during its fitting and optimization, and pipelines that evaluate the baseline model on this data. 
+`test` refers to the pre-intervention data that the baseline model did not see during its fitting and optimization, and the pipelines that evaluate the baseline model on this data. 
 
-`post` concerns post-intervention data, and pipelines that calculate cumulative energy savings and their uncertainty intervals.
+`post` refers to the post-intervention data, and the pipelines that calculate cumulative energy savings and their uncertainty intervals.
 
-Adding the appropriate namespace to a dataset's name helps automate the process of selecting and running pipelines.
-
-```erlang
-train.preprocessed_data:
-    type: ${globals:types.csv}
-    filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/train/preprocessed.csv
-    load_args:
-      sep: ','
-      index_col : 0
-      parse_dates : 
-        - 0
-    save_args:
-      index: true
-    versioned : ${versioned}
-
-  test.preprocessed_data:
-    type: ${globals:types.csv}
-    filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/test/preprocessed.csv
-    load_args:
-      sep: ','
-      index_col : 0
-      parse_dates :
-        - 0
-    save_args:
-      index: true
-    versioned : ${versioned}
- ```
+Adding the appropriate namespace at the beginning of a dataset's name helps automate the process of selecting and running pipelines.
 
 ## Model configurations
 
-`eensight` is built around ensembles of localized linear regreesion models. The structure of these base models (main effects and pairwise interactions) can be defined using YAML files: 
+`eensight` is built around ensembles of localized linear regreesion models. The structure of these base models (main effects and pairwise interactions) can be defined using YAML files. These files have two sections: (a) regressors and (b) interactions.
+
+### Regressors
+
+The information for each regressor includes the name of the regressor, the name of the feature to use and encode so that to create this regressor, the type of the encoder (linear, spline or categorical), and the parameters to pass to the corresponding encoder class from `eensight.features.encode`:
+
+- IdentityEncoder
+- SplineEncoder
+- CategoricalEncoder
+
+ 
 
 ```yaml
 regressors:
-  month:           # the name of the regressor
-    feature: month # the name of the feature to use and encode so that to create the regressor 
-    type: categorical
-    max_n_categories: null
-    encode_as: onehot 
-    interaction_only: false
-  
-  tow:
-    feature: hourofweek
+  tow:                    # the name of the regressor
+    feature: hourofweek   # the name of the feature 
     type: categorical
     max_n_categories: null 
     stratify_by: null 
@@ -122,12 +117,24 @@ regressors:
     max_features: null 
     encode_as: onehot 
     interaction_only: false
-  
-  temperature:
-    feature: temperature
-    type: linear
-    include_bias: false
 
+  ...
+```
+ 
+
+### Interactions
+
+`eensight` supports pairwise interactions:
+
+- categorical by categorical
+- categorical by linear
+- categorical by spline
+- linear by linear
+- spline by spline
+
+Interactions can introduce new regressors, reuse regressors already defined in the regressors section, as well as update the parameters of regressors that are already defined:
+
+```yaml
 interactions:
   tow, temperature:
     tow:
@@ -144,7 +151,7 @@ interactions:
 
 ## Parameter values
 
-`eensight` pipelines get their parameter settings for YAML files in the conf/base/parameters directory.
+`eensight` pipelines get their parameter settings from YAML files in the *conf/base/parameters* directory.
 
 ```
 conf
@@ -160,7 +167,7 @@ conf
 │           │   ...
 ```
 
-Parameters are accessed and treated exactly as prescribed by the Kedro documentation: https://kedro.readthedocs.io/en/stable/04_kedro_project_setup/02_configuration.html#parameters 
+Parameters are accessed and treated exactly as prescribed by the Kedro documentation: https://kedro.readthedocs.io/en/stable/04_kedro_project_setup/02_configuration.html#parameters
 
 ## Run command arguments
 
@@ -168,7 +175,7 @@ The primary way of using `eensight` is through the command line:
 
 <code>python -m eensight </code>
 
-The command line functionality uses the [Hydra framework](https://hydra.cc/), which can dynamically create a hierarchical configuration by composition and override it through config files and the command line.
+The command line functionality uses the [Hydra framework](https://hydra.cc/):
 
 ```python
 from .settings import DEFAULT_CATALOG, DEFAULT_MODEL, DEFAULT_PARAMETERS, PROJECT_PATH
@@ -190,45 +197,22 @@ def run(cfg: DictConfig):
 The `run_config.yaml` file includes all the availabe command line options:
 
 ```yaml
-# The name of the catalog configuration file to load
-catalog : null 
-# The name of the model configuration file to load
-model : null
-# The name of the parameters configuration file to load
-parameters : null 
-#Name of the modular pipeline to run. If not set, the project pipeline is run 
-# by default
-pipeline : null 
-# Specify a runner that you want to run the pipeline with.
-# Available runners: `SequentialRunner`, `ParallelRunner` and `ThreadRunner`
-# If not set, `SequentialRunner` will be used.
-runner : null 
-# Load and save node inputs and outputs asynchronously with threads. 
-# If not specified, load and save datasets synchronously
-async : False
-# Kedro configuration environment name. Defaults to `local`.
-env: null 
-# A list of dataset names which should be used as a starting point
-from_inputs : null 
-# A list of dataset names which should be used as an end point
-to_outputs : null 
-# A list of node names which should be used as a starting point
-from_nodes : null 
-# A list of node names which should be used as an end point
-to_nodes : null 
-# A list with node names. The `run` function will run only the nodes with 
-# specified names
-nodes : null 
-# List of tags. Construct a pipeline from nodes having any of these tags
-tags : null
-# A mapping between dataset names and versions to load. Has no effect on 
-# data sets without enabled versioning. 
-load_versions : null
-# Specify extra parameters that you want to pass to the context initializer. 
-# The value of these parameters will override the values in the `parameters`
-# configuration file
-params : null 
+
+catalog # The name of the catalog configuration file to load 
+model # The name of the model configuration file to load
+parameters # The name of the parameters configuration file to load
+pipeline # The name of the modular pipeline to run
+runner # The runner that you want to run the pipeline with
+async # If load and save node inputs and outputs should be done asynchronously with threads
+env # Kedro configuration environment name
+from_inputs # A list of dataset names which should be used as a starting point
+to_outputs # A list of dataset names which should be used as an end point
+from_nodes # A list of node (pipeline step) names which should be used as a starting point
+to_nodes # A list of node names which should be used as an end point 
+nodes # A list with node names. The `run` function will run only these nodes
+tags # List of tags. Construct a pipeline from nodes having any of these tags
+load_versions # A mapping between dataset names and versions to load
+params # These values will override the values in the `parameters` configuration file 
 ```
 
-`eensight` uses its onw `CustomContext` (that extends `KedroContext`) so that the selected catalog, model and parameter configuration files are passed to the `OmegaConfigLoader`.
- 
+`eensight` uses its onw `CustomContext` (that extends `KedroContext`) so that the selected catalog, model and parameter configuration files are passed to the `OmegaConfigLoader`, and become available in the application's [data catalog object](https://kedro.readthedocs.io/en/stable/kedro.io.DataCatalog.html).

@@ -50,75 +50,11 @@ UNKNOWN_VALUE = -1
 
 
 #####################################################################################
-# IdentityEncoder (utility encoder)
+# Add new features
+#
+# All feature generation transformers generate pandas DataFrames
 #####################################################################################
 
-
-class IdentityEncoder(TransformerMixin, BaseEstimator):
-    """
-    The identity encoder returns what it is fed.
-
-    Args:
-        feature : str or list of str, default=None
-            The name(s) of the input dataframe's column(s) to return.
-            If None, the whole input dataframe is returned.
-        include_bias : bool, default=False
-            If True, a column of ones is added to the output.
-    """
-
-    def __init__(self, feature=None, include_bias=False):
-        self.feature = feature
-        self.include_bias = include_bias
-        self.features_ = as_list(feature)
-
-    def fit(self, X, y=None):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-            y : None
-                There is no need of a target in a transformer, but the pipeline
-                API requires this parameter.
-
-        Returns:
-            self : object
-                Returns self.
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        X = check_X(X)
-        n_features_out_ = len(self.features_) if self.features_ else X.shape[1]
-        self.n_features_out_ = int(self.include_bias) + n_features_out_
-        self.fitted_ = True
-        return self
-
-    def transform(self, X):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-
-        Returns:
-            X_transformed : numpy array, shape (n_samples, n_features_out_)
-                The selected column subset as a numpy array
-
-        Raises:
-            ValueError: If `include_bias` is True and a column with constant
-            values already exists in the returned columns, or if the input data
-            do not pass the checks of `eensight.utils.check_X`.
-        """
-        check_is_fitted(self, "fitted_")
-        X = check_X(X[self.features_]) if self.features_ else check_X(X)
-        if self.include_bias:
-            X = add_constant(X, has_constant="raise")
-
-        return np.array(X)
-
-
-#####################################################################################
-# Time trend features
-#####################################################################################
 
 class TrendFeatures(TransformerMixin, BaseEstimator):
     """
@@ -167,8 +103,7 @@ class TrendFeatures(TransformerMixin, BaseEstimator):
                 The input dataframe.
 
         Returns:
-            X_transformed : numpy array, shape (n_samples, n_features_out_)
-                The selected column subset as a numpy array.
+            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
 
         Raises:
             ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
@@ -178,17 +113,20 @@ class TrendFeatures(TransformerMixin, BaseEstimator):
         dates = X.index.to_series() if self.feature is None else X[self.feature]
 
         if not self.include_bias:
-            return self.t_scaler_.transform(dates.to_frame())
-        else:
-            return np.concatenate(
-                (np.ones((len(X), 1)), self.t_scaler_.transform(dates.to_frame())),
-                axis=1,
+            return pd.DataFrame(
+                data=self.t_scaler_.transform(dates.to_frame()),
+                columns=["growth"],
+                index=X.index,
             )
-
-
-#####################################################################################
-# Date and time features
-#####################################################################################
+        else:
+            return pd.DataFrame(
+                data=np.concatenate(
+                    (np.ones((len(X), 1)), self.t_scaler_.transform(dates.to_frame())),
+                    axis=1,
+                ),
+                columns=["offset", "growth"],
+                index=X.index,
+            )
 
 
 class DatetimeFeatures(TransformerMixin, BaseEstimator):
@@ -253,7 +191,7 @@ class DatetimeFeatures(TransformerMixin, BaseEstimator):
         """
         X = check_X(X)
         dt_column = get_datetime_data(X, col_name=self.feature)
-        self.attr_ = self._get_all_attributes(dt_column)  
+        self.attr_ = self._get_all_attributes(dt_column)
         n_features_out_ = len(self.attr_)
         self.n_features_out_ = (
             n_features_out_ + int(self.remainder == "passthrough") * X.shape[1]
@@ -268,8 +206,7 @@ class DatetimeFeatures(TransformerMixin, BaseEstimator):
                 The input dataframe.
 
         Returns:
-            X_transformed : numpy array, shape (n_samples, n_features_out_)
-                The selected column subset as a numpy array.
+            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
 
         Raises:
             ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
@@ -277,7 +214,7 @@ class DatetimeFeatures(TransformerMixin, BaseEstimator):
         check_is_fitted(self, "fitted_")
         X = check_X(X)
         dt_column = get_datetime_data(X, col_name=self.feature)
-        
+
         out = {}
         for n in self.attr_:
             if n == "week":
@@ -313,12 +250,12 @@ class CyclicalFeatures(TransformerMixin, BaseEstimator):
     """Create cyclical (seasonal) features as fourier terms
 
     Args:
+        seasonality : str
+            The name of the seasonality.
         feature : str, default=None
             The name of the input dataframe's column that contains datetime information.
             If None, it is assumed that the datetime information is provided by the
             input dataframe's index.
-        seasonality : str, default=None
-            The name of the seasonality.
         period : float
             Number of days in one period.
         fourier_order : int
@@ -329,15 +266,9 @@ class CyclicalFeatures(TransformerMixin, BaseEstimator):
         is one of `daily`, `weekly` or `yearly`.
     """
 
-    def __init__(
-        self,
-        feature=None,
-        seasonality=None,
-        period=None,
-        fourier_order=None
-    ):
-        self.feature = feature
+    def __init__(self, *, seasonality, feature=None, period=None, fourier_order=None):
         self.seasonality = seasonality
+        self.feature = feature
         self.period = period
         self.fourier_order = fourier_order
 
@@ -414,16 +345,21 @@ class CyclicalFeatures(TransformerMixin, BaseEstimator):
                 The input dataframe.
 
         Returns:
-            X_transformed : numpy array, shape (n_samples, n_features_out_)
-                The selected column subset as a numpy array.
-        
+            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
+
         Raises:
             ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
         """
         X = check_X(X)
         dt_column = get_datetime_data(X, col_name=self.feature)
         out = self._fourier_series(dt_column, self.period, self.fourier_order)
-        return out
+        return pd.DataFrame(
+            data=out,
+            index=X.index,
+            columns=[
+                f"{self.seasonality}_delim_{i}" for i in range(self.n_features_out_)
+            ],
+        )
 
 
 class MMCFeatures(TransformerMixin, BaseEstimator):
@@ -470,8 +406,7 @@ class MMCFeatures(TransformerMixin, BaseEstimator):
                 The input dataframe.
 
         Returns:
-            X_transformed : numpy array, shape (n_samples, n_features_out_)
-                The selected column subset as a numpy array.
+            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
 
         Raises:
             ValueError: If the input data do not pass the checks of
@@ -492,15 +427,111 @@ class MMCFeatures(TransformerMixin, BaseEstimator):
         return features
 
 
-#############################################################################
+#####################################################################################
+# Encode features
+#
+# All encoders generate numpy arrays
+#####################################################################################
+
+
+# ------------------------------------------------------------------------------------
+# IdentityEncoder (utility encoder)
+# ------------------------------------------------------------------------------------
+
+
+class IdentityEncoder(TransformerMixin, BaseEstimator):
+    """
+    The identity encoder returns what it is fed.
+
+    Args:
+        feature : str or list of str, default=None
+            The name(s) of the input dataframe's column(s) to return. If
+            None, the whole input dataframe will be returned.
+        as_filter : bool, default=False
+            If True, the encoder will return all feature labels for which
+            "feature in label == True".
+        include_bias : bool, default=False
+            If True, a column of ones is added to the output.
+    """
+
+    def __init__(self, feature=None, as_filter=False, include_bias=False):
+        if as_filter and isinstance(feature, list):
+            raise ValueError(
+                "If `as_filter` is True, `feature` cannot include multiple feature names"
+            )
+
+        self.feature = feature
+        self.as_filter = as_filter
+        self.include_bias = include_bias
+        self.features_ = as_list(feature)
+
+    def fit(self, X, y=None):
+        """
+        Args:
+            X : pd.DataFrame, shape (n_samples, n_features)
+                The input dataframe.
+            y : None
+                There is no need of a target in a transformer, but the pipeline
+                API requires this parameter.
+
+        Returns:
+            self : object
+                Returns self.
+
+        Raises:
+            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
+        """
+        X = check_X(X)
+
+        if self.feature is None:
+            n_features_out_ = X.shape[1]
+        elif (self.feature is not None) and not self.as_filter:
+            n_features_out_ = len(self.features_)
+        else:
+            n_features_out_ = X.filter(like=self.feature, axis=1).shape[1]
+
+        self.n_features_out_ = int(self.include_bias) + n_features_out_
+        self.fitted_ = True
+        return self
+
+    def transform(self, X):
+        """
+        Args:
+            X : pd.DataFrame, shape (n_samples, n_features)
+                The input dataframe.
+
+        Returns:
+            X_transformed : numpy array, shape (n_samples, n_features_out_)
+                The selected column subset as a numpy array
+
+        Raises:
+            ValueError: If `include_bias` is True and a column with constant
+            values already exists in the returned columns, or if the input data
+            do not pass the checks of `eensight.utils.check_X`.
+        """
+        check_is_fitted(self, "fitted_")
+        X = check_X(X)
+
+        if (self.feature is not None) and not self.as_filter:
+            X = X[self.features_]
+        elif self.feature is not None:
+            X = X.filter(like=self.feature, axis=1)
+
+        if self.include_bias:
+            X = add_constant(X, has_constant="raise")
+
+        return np.array(X)
+
+
+# ------------------------------------------------------------------------------------
 # Encode categorical data
-#############################################################################
+# ------------------------------------------------------------------------------------
 
 
 class SafeOrdinalEncoder(TransformerMixin, BaseEstimator):
     """
-    Encode categorical features as an integer array. The encoder converts the 
-    features into ordinal integers. This results in a single column of integers 
+    Encode categorical features as an integer array. The encoder converts the
+    features into ordinal integers. This results in a single column of integers
     (0 to n_categories - 1) per feature.
 
     Args:
@@ -597,9 +628,9 @@ class SafeOrdinalEncoder(TransformerMixin, BaseEstimator):
 
 class SafeOneHotEncoder(TransformerMixin, BaseEstimator):
     """
-    The encoder uses a `SafeOrdinalEncoder`to first encode the feature as an integer 
-    array and then a `sklearn.preprocessing.OneHotEncoder` to encode the features as 
-    an one-hot array. 
+    The encoder uses a `SafeOrdinalEncoder`to first encode the feature as an integer
+    array and then a `sklearn.preprocessing.OneHotEncoder` to encode the features as
+    an one-hot array.
 
     Args:
         feature : str or list of str, default=None
@@ -661,7 +692,7 @@ class SafeOneHotEncoder(TransformerMixin, BaseEstimator):
         self.n_features_out_ = 0
         for category in self.feature_pipeline_["one_hot"].categories_:
             self.n_features_out_ += len(category)
-        
+
         self.fitted_ = True
         return self
 
@@ -690,7 +721,7 @@ class TargetClusterEncoder(TransformerMixin, BaseEstimator):
 
     Args:
         feature : str
-            The name of the categorical feature to transform. This encoder operates 
+            The name of the categorical feature to transform. This encoder operates
             on a single feature.
         max_n_categories : int
             The maximum number of categories to produce.
@@ -917,7 +948,7 @@ class CategoricalEncoder(TransformerMixin, BaseEstimator):
 
     Args:
         feature : str
-            The name of the categorical feature to transform. This encoder operates on 
+            The name of the categorical feature to transform. This encoder operates on
             a single feature.
         max_n_categories : int (default=None)
             The maximum number of categories to produce.
@@ -1102,9 +1133,9 @@ class CategoricalEncoder(TransformerMixin, BaseEstimator):
         return self.feature_pipeline_.transform(X)
 
 
-#############################################################################
-# Encoding pairwise categorical data interactions
-#############################################################################
+# ------------------------------------------------------------------------------------
+# Encode pairwise categorical data interactions
+# ------------------------------------------------------------------------------------
 
 
 class ICatEncoder(TransformerMixin, BaseEstimator):
@@ -1125,6 +1156,12 @@ class ICatEncoder(TransformerMixin, BaseEstimator):
     def __init__(
         self, encoder_left: CategoricalEncoder, encoder_right: CategoricalEncoder
     ):
+        if not isinstance(encoder_left, CategoricalEncoder) or not isinstance(
+            encoder_right, CategoricalEncoder
+        ):
+            raise ValueError(
+                "This pairwise interaction encoder expects `CategoricalEncoder` encoders"
+            )
         if encoder_left.encode_as != encoder_right.encode_as:
             raise ValueError(
                 "Both encoders should have the same `encode_as` parameter."
@@ -1191,9 +1228,9 @@ class ICatEncoder(TransformerMixin, BaseEstimator):
             return np.core.defchararray.add(X_left, X_right)
 
 
-########################################################################################
-# Encoding numerical data
-########################################################################################
+# ------------------------------------------------------------------------------------
+# Encode numerical data
+# ------------------------------------------------------------------------------------
 
 
 class SplineEncoder(TransformerMixin, BaseEstimator):
@@ -1227,7 +1264,7 @@ class SplineEncoder(TransformerMixin, BaseEstimator):
             and maximum value of the features is used as constant extrapolation. If
             'linear', a linear extrapolation is used. If 'continue', the splines are
             extrapolated as is, i.e. option `extrapolate=True` in `scipy.interpolate.BSpline`.
-        include_bias : bool, default=False
+        include_bias : bool, default=True
             If False, then the last spline element inside the data range of a feature
             is dropped. As B-splines sum to one over the spline basis functions for each
             data point, they implicitly include a bias term.
@@ -1244,7 +1281,7 @@ class SplineEncoder(TransformerMixin, BaseEstimator):
         degree=3,
         strategy="quantile",
         extrapolation="constant",
-        include_bias=False,
+        include_bias=True,
         order="C",
     ):
         self.feature = feature
@@ -1312,9 +1349,9 @@ class SplineEncoder(TransformerMixin, BaseEstimator):
         return self.encoder_.transform(X[[self.feature]])
 
 
-#######################################################################################
-# Encoding pairwise interactions between numerical features
-#######################################################################################
+# ------------------------------------------------------------------------------------
+# Encode pairwise interactions between numerical features
+# ------------------------------------------------------------------------------------
 
 
 class ISplineEncoder(TransformerMixin, BaseEstimator):
@@ -1332,8 +1369,12 @@ class ISplineEncoder(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, encoder_left: SplineEncoder, encoder_right: SplineEncoder):
-        if encoder_left.include_bias and encoder_right.include_bias:
-            raise ValueError("`include_bias` cannot be True for both encoders")
+        if not isinstance(encoder_left, SplineEncoder) or not isinstance(
+            encoder_right, SplineEncoder
+        ):
+            raise ValueError(
+                "This pairwise interaction encoder expects `SplineEncoder` encoders"
+            )
 
         self.encoder_left = encoder_left
         self.encoder_right = encoder_right
@@ -1381,7 +1422,6 @@ class ISplineEncoder(TransformerMixin, BaseEstimator):
             `eensight.utils.check_X`.
         """
         check_is_fitted(self, "fitted_")
-
         X_left = self.encoder_left.transform(X)
         X_right = self.encoder_right.transform(X)
         return tensor_product(X_left, X_right)
@@ -1402,11 +1442,12 @@ class ProductEncoder(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, encoder_left: IdentityEncoder, encoder_right: IdentityEncoder):
-        if encoder_left.include_bias or encoder_right.include_bias:
-            raise ValueError("`include_bias` cannot be True for any of the encoders")
-
-        if (len(encoder_left.features_) > 1) or (len(encoder_right.features_) > 1):
-            raise ValueError("This encoder supports only pairwise interactions")
+        if not isinstance(encoder_left, IdentityEncoder) or not isinstance(
+            encoder_right, IdentityEncoder
+        ):
+            raise ValueError(
+                "This pairwise interaction encoder expects `IdentityEncoder` encoders"
+            )
 
         self.encoder_left = encoder_left
         self.encoder_right = encoder_right
@@ -1428,6 +1469,11 @@ class ProductEncoder(TransformerMixin, BaseEstimator):
                 check_is_fitted(encoder, "fitted_")
             except NotFittedError:
                 encoder.fit(X)
+            finally:
+                if encoder.n_features_out_ > 1:
+                    raise ValueError(
+                        "This pairwise interaction encoder supports only single-feature encoders"
+                    )
 
         self.n_features_out_ = 1
         self.fitted_ = True
@@ -1449,9 +1495,9 @@ class ProductEncoder(TransformerMixin, BaseEstimator):
         return np.multiply(X_left, X_right)
 
 
-###############################################################################
-# Encoding pairwise interactions of one numerical and one categorical feature
-###############################################################################
+# ------------------------------------------------------------------------------------
+# Encode pairwise interactions of one numerical and one categorical feature
+# ------------------------------------------------------------------------------------
 
 
 class ICatLinearEncoder(TransformerMixin, BaseEstimator):
@@ -1463,7 +1509,7 @@ class ICatLinearEncoder(TransformerMixin, BaseEstimator):
             The encoder for the categorical feature. It must encode features in
             an one-hot form.
         encoder_num : eensight.features.encode.IdentityEncoder
-            The encoder for the numerical feature. The  encoder should have
+            The encoder for the numerical feature. The encoder should have
             `include_bias=True`. This is necessary so that so that it is possible
             to model a different intercept for each categorical feature's level.
 
@@ -1475,11 +1521,17 @@ class ICatLinearEncoder(TransformerMixin, BaseEstimator):
     def __init__(
         self, *, encoder_cat: CategoricalEncoder, encoder_num: IdentityEncoder
     ):
+        if not isinstance(encoder_cat, CategoricalEncoder):
+            raise ValueError("`encoder_cat` must be a CategoricalEncoder")
+
         if encoder_cat.encode_as != "onehot":
             raise ValueError(
                 "This encoder supports only one-hot encoding of the "
                 "categorical feature"
             )
+
+        if not isinstance(encoder_num, IdentityEncoder):
+            raise ValueError("`encoder_num` must be an IdentityEncoder")
 
         if not encoder_num.include_bias:
             raise ValueError(
@@ -1553,12 +1605,9 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
 
     Notes:
         - If the categorical encoder is already fitted, it will not be re-fitted during
-        `fit` or `fit_transform`. 
-        - The numerical encoder will always be (re)fitted (one encoder per level of 
+        `fit` or `fit_transform`.
+        - The numerical encoder will always be (re)fitted (one encoder per level of
         categorical feature).
-        - If the numerical encoder is a `SplineEncoder`, it should have `include_bias=True`. 
-        This is necessary so that so that it is possible to model a different intercept for 
-        each categorical feature's level.
     """
 
     def __init__(
@@ -1567,17 +1616,18 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
         encoder_cat: CategoricalEncoder,
         encoder_num: Union[SplineEncoder, CyclicalFeatures],
     ):
+        if not isinstance(encoder_cat, CategoricalEncoder):
+            raise ValueError("`encoder_cat` must be a CategoricalEncoder")
+
         if encoder_cat.encode_as != "onehot":
             raise ValueError(
                 "This encoder supports only one-hot encoding of the "
                 "categorical feature"
             )
 
-        if isinstance(encoder_num, SplineEncoder) and not encoder_num.include_bias:
+        if not isinstance(encoder_num, (SplineEncoder, CyclicalFeatures)):
             raise ValueError(
-                "The numerical encoder should have `include_bias=True`. This is "
-                "necessary so that so that it is possible to model a different "
-                "intercept for each categorical feature's level."
+                "`encoder_num` must be either a SplineEncoder or a CyclicalFeatures"
             )
 
         self.encoder_cat = encoder_cat

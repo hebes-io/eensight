@@ -19,6 +19,8 @@ from kedro.framework.hooks import get_hook_manager
 from kedro.io import DataCatalog
 from kedro.versioning import Journal
 
+from .validation import parse_model_config
+
 
 class CustomContext(KedroContext):
     """``CustomContext`` is the base class which holds the configuration and
@@ -61,19 +63,19 @@ class CustomContext(KedroContext):
         try:
             selected_params = inject.instance("selected_params")
             if selected_params is None:
-                params = {}
+                conf_params = {}
             else:
-                params = self.config_loader.get(
+                conf_params = self.config_loader.get(
                     f"parameters/{selected_params}*",
                     f"parameters/{selected_params}*/**",
                     f"**/parameters/{selected_params}*",
                 )
         except MissingConfigException as exc:
             warn(f"Parameters not found in your Kedro project config.\n{str(exc)}")
-            params = {}
+            conf_params = {}
 
-        params.update(self._extra_params or {})
-        return params
+        conf_params.update(self._extra_params or {})
+        return conf_params
 
     def _get_catalog(
         self,
@@ -136,12 +138,13 @@ class CustomContext(KedroContext):
         catalog.add_feed_dict(dict(location=location))
 
         if selected_model is not None:
-            model = self.config_loader.get(
+            conf_model = self.config_loader.get(
                 f"models/{selected_model}*",
                 f"models/{selected_model}*/**",
                 f"**/models/{selected_model}*",
             )
-            catalog.add_feed_dict(dict(models=model))
+            model_structure = parse_model_config(conf_model)
+            catalog.add_feed_dict(dict(model=model_structure))
 
         if catalog.layers:
             _validate_layers_for_transcoding(catalog)

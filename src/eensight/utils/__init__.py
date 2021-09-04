@@ -48,9 +48,6 @@ def get_categorical_cols(X, int_is_categorical=True):
     """
     Returns names of categorical columns in the input DataFrame.
     """
-    if not isinstance(X, pd.DataFrame):
-        raise ValueError("Input values are expected as pandas DataFrames.")
-
     obj_cols = []
     for col in X.columns:
         # check if it is date

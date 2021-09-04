@@ -1,5 +1,5 @@
 from .cluster import ClusterFeatures
-from .compose import LinearModelFeatures, parse_model_config
+from .compose import LinearModelFeatures
 from .encode import (
     CategoricalEncoder,
     CyclicalFeatures,
