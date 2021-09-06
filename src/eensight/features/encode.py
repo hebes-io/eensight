@@ -7,8 +7,6 @@
 import logging
 import warnings
 from collections import OrderedDict
-from datetime import datetime
-from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -25,7 +23,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     FunctionTransformer,
-    MinMaxScaler,
     OneHotEncoder,
     OrdinalEncoder,
     StandardScaler,
@@ -39,7 +36,6 @@ from eensight.utils import (
     as_list,
     check_X,
     check_y,
-    get_datetime_data,
     maybe_reshape_2d,
     tensor_product,
 )
@@ -48,391 +44,10 @@ logger = logging.getLogger("feature-encoding")
 
 UNKNOWN_VALUE = -1
 
-
-#####################################################################################
-# Add new features
-#
-# All feature generation transformers generate pandas DataFrames
-#####################################################################################
-
-
-class TrendFeatures(TransformerMixin, BaseEstimator):
-    """
-    Generate time trend features
-
-    Args:
-        feature : str, default=None
-            The name of the input dataframe's column that contains datetime information.
-            If None, it is assumed that the datetime information is provided by the
-            input dataframe's index.
-        include_bias : bool, default=False
-            If True, a column of ones is added to the output.
-    """
-
-    def __init__(self, feature=None, include_bias=False):
-        self.feature = feature
-        self.include_bias = include_bias
-
-    def fit(self, X, y=None):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-            y : None
-                There is no need of a target in a transformer, but the pipeline
-                API requires this parameter.
-
-        Returns:
-            self : object
-                Returns self.
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        X = check_X(X)
-        dates = X.index.to_series() if self.feature is None else X[self.feature]
-        self.t_scaler_ = MinMaxScaler().fit(dates.to_frame())
-        self.n_features_out_ = 1 + int(self.include_bias)
-        self.fitted_ = True
-        return self
-
-    def transform(self, X):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-
-        Returns:
-            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        check_is_fitted(self, "fitted_")
-        X = check_X(X)
-        dates = X.index.to_series() if self.feature is None else X[self.feature]
-
-        if not self.include_bias:
-            return pd.DataFrame(
-                data=self.t_scaler_.transform(dates.to_frame()),
-                columns=["growth"],
-                index=X.index,
-            )
-        else:
-            return pd.DataFrame(
-                data=np.concatenate(
-                    (np.ones((len(X), 1)), self.t_scaler_.transform(dates.to_frame())),
-                    axis=1,
-                ),
-                columns=["offset", "growth"],
-                index=X.index,
-            )
-
-
-class DatetimeFeatures(TransformerMixin, BaseEstimator):
-    """
-    Generate date and time features
-
-    Args:
-        feature : str, default=None
-            The name of the input dataframe's column that contains datetime information.
-            If None, it is assumed that the datetime information is provided by the
-            input dataframe's index.
-        remainder : str, :type : {'drop', 'passthrough'}, default='drop'
-            By specifying ``remainder='passthrough'``, all the remaining columns of the
-            input dataset will be automatically passed through (concatenated with the
-            output of the transformer).
-        replace : bool, default=False
-            Specifies whether replacing an existing column with the same name is allowed
-            (when `remainder=passthrough`).
-        subset : str or list of str (default=None)
-            The names of the features to generate. If None, all features will be produced:
-            'month', 'week', 'dayofyear', 'dayofweek', 'hour', 'hourofweek', 'time'.
-            The last 3 features are generated only if the timestep of the input's
-            `feature` (or index if `feature` is None) is smaller than `pd.Timedelta(days=1)`.
-    """
-
-    def __init__(self, feature=None, remainder="drop", replace=False, subset=None):
-        if remainder not in ("passthrough", "drop"):
-            raise ValueError('Parameter "remainder" should be "passthrough" or "drop"')
-
-        self.feature = feature
-        self.remainder = remainder
-        self.replace = replace
-        self.subset = subset
-
-    def _get_all_attributes(self, dt_column):
-        attr = ["month", "week", "dayofyear", "dayofweek"]
-
-        dt = dt_column.diff()
-        time_step = dt.iloc[dt.values.nonzero()[0]].min()
-        if time_step < pd.Timedelta(days=1):
-            attr = attr + ["hour", "hourofweek", "time"]
-
-        if self.subset is not None:
-            attr = [i for i in attr if i in as_list(self.subset)]
-        return attr
-
-    def fit(self, X, y=None):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-            y : None
-                There is no need of a target in a transformer, but the pipeline
-                API requires this parameter.
-
-        Returns:
-            self : object
-                Returns self.
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        X = check_X(X)
-        dt_column = get_datetime_data(X, col_name=self.feature)
-        self.attr_ = self._get_all_attributes(dt_column)
-        n_features_out_ = len(self.attr_)
-        self.n_features_out_ = (
-            n_features_out_ + int(self.remainder == "passthrough") * X.shape[1]
-        )
-        self.fitted_ = True
-        return self
-
-    def transform(self, X):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-
-        Returns:
-            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        check_is_fitted(self, "fitted_")
-        X = check_X(X)
-        dt_column = get_datetime_data(X, col_name=self.feature)
-
-        out = {}
-        for n in self.attr_:
-            if n == "week":
-                out[n] = (
-                    dt_column.dt.isocalendar().week.astype(dt_column.dt.day.dtype)
-                    if hasattr(dt_column.dt, "isocalendar")
-                    else dt_column.dt.week
-                )
-            elif n == "hourofweek":
-                out[n] = None
-            else:
-                out[n] = getattr(dt_column.dt, n)
-
-        if "hourofweek" in out:
-            out["hourofweek"] = 24 * out.get(
-                "dayofweek", dt_column.dt.dayofweek
-            ) + out.get("hour", dt_column.dt.hour)
-
-        out = pd.DataFrame.from_dict(out)
-
-        if self.remainder == "passthrough":
-            common = list(set(X.columns) & set(out.columns))
-            if common and not self.replace:
-                raise ValueError(f"Found common column names {common}")
-            elif common:
-                X = X.drop(common, axis=1)
-            out = pd.concat((X, out), axis=1)
-
-        return out
-
-
-class CyclicalFeatures(TransformerMixin, BaseEstimator):
-    """Create cyclical (seasonal) features as fourier terms
-
-    Args:
-        seasonality : str
-            The name of the seasonality.
-        feature : str, default=None
-            The name of the input dataframe's column that contains datetime information.
-            If None, it is assumed that the datetime information is provided by the
-            input dataframe's index.
-        period : float
-            Number of days in one period.
-        fourier_order : int
-            Number of Fourier components to use.
-
-    Note:
-        The encoder can provide default values for `period` and `fourier_order` if `seasonality`
-        is one of `daily`, `weekly` or `yearly`.
-    """
-
-    def __init__(self, *, seasonality, feature=None, period=None, fourier_order=None):
-        self.seasonality = seasonality
-        self.feature = feature
-        self.period = period
-        self.fourier_order = fourier_order
-
-    @staticmethod
-    def _fourier_series(dates, period, order):
-        """Provides Fourier series components with the specified frequency
-        and order.
-
-        Args:
-            dates: pd.Series containing timestamps.
-            period: Number of days of the period.
-            order: Number of components.
-
-        Returns:
-            Matrix with seasonality features.
-        """
-        # convert to days since epoch
-        t = np.array(
-            (dates - datetime(2000, 1, 1)).dt.total_seconds().astype(np.float64)
-        ) / (3600 * 24.0)
-
-        return np.column_stack(
-            [
-                fun((2.0 * (i + 1) * np.pi * t / period))
-                for i in range(order)
-                for fun in (np.sin, np.cos)
-            ]
-        )
-
-    def fit(self, X, y=None):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-            y : None
-                There is no need of a target in a transformer, but the pipeline
-                API requires this parameter.
-
-        Returns:
-            self : object
-                Returns self.
-        """
-        if self.seasonality not in ["daily", "weekly", "yearly"]:
-            if (self.period is None) or (self.fourier_order is None):
-                raise ValueError(
-                    "When adding custom seasonalities, values for "
-                    "`period` and `fourier_order` must be specified."
-                )
-        if self.seasonality in ["daily", "weekly", "yearly"]:
-            if self.period is None:
-                self.period = (
-                    1
-                    if self.seasonality == "daily"
-                    else 7
-                    if self.seasonality == "weekly"
-                    else 365.25
-                )
-            if self.fourier_order is None:
-                self.fourier_order = (
-                    4
-                    if self.seasonality == "daily"
-                    else 3
-                    if self.seasonality == "weekly"
-                    else 6
-                )
-        self.n_features_out_ = 2 * self.fourier_order
-        self.fitted_ = True
-        return self
-
-    def transform(self, X):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-
-        Returns:
-            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        X = check_X(X)
-        dt_column = get_datetime_data(X, col_name=self.feature)
-        out = self._fourier_series(dt_column, self.period, self.fourier_order)
-        return pd.DataFrame(
-            data=out,
-            index=X.index,
-            columns=[
-                f"{self.seasonality}_delim_{i}" for i in range(self.n_features_out_)
-            ],
-        )
-
-
-class MMCFeatures(TransformerMixin, BaseEstimator):
-    """
-    Generate `month` and `dayofweek` one-hot encoded features for training an MMC
-    (Mahalanobis Metric for Clustering) metric learning algorithm.
-
-    Args:
-        month_feature : str, default='month'
-            The name of the input dataframe's column that contains the `month` feature values.
-        dow_feature : str, default='dayofweek'
-            The name of the input dataframe's column that contains the `dayofweek` feature values.
-    """
-
-    def __init__(self, month_feature="month", dow_feature="dayofweek"):
-        self.month_feature = month_feature
-        self.dow_feature = dow_feature
-
-    def fit(self, X, y=None):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-            y : None
-                There is no need of a target in a transformer, but the pipeline
-                API requires this parameter.
-
-        Returns:
-            self : object
-                Returns self.
-
-        Raises:
-            ValueError: If the input data do not pass the checks of `eensight.utils.check_X`.
-        """
-        X = check_X(X, exists=[self.month_feature, self.dow_feature])
-        self.n_features_out_ = 19
-        self.fitted_ = True
-        return self
-
-    def transform(self, X):
-        """
-        Args:
-            X : pd.DataFrame, shape (n_samples, n_features)
-                The input dataframe.
-
-        Returns:
-            X_transformed : pd.DataFrame, shape (n_samples, n_features_out_)
-
-        Raises:
-            ValueError: If the input data do not pass the checks of
-            `eensight.utils.check_X`.
-        """
-        check_is_fitted(self, "fitted_")
-        X = check_X(X, exists=[self.month_feature, self.dow_feature])
-        features = pd.DataFrame(0, index=X.index, columns=range(1, 20))
-
-        temp = pd.get_dummies(X[self.month_feature].astype(int))
-        for col in temp.columns:
-            features[col] = temp[col]
-
-        temp = pd.get_dummies(X[self.dow_feature].astype(int))
-        for col in temp.columns:
-            features[col + 13] = temp[col]
-
-        return features
-
-
 #####################################################################################
 # Encode features
-#
 # All encoders generate numpy arrays
 #####################################################################################
-
 
 # ------------------------------------------------------------------------------------
 # IdentityEncoder (utility encoder)
@@ -1148,16 +763,16 @@ class ICatEncoder(TransformerMixin, BaseEstimator):
             The encoder for the second of the two features
 
     Note:
-        Both encoders should have the same `encode_as` parameter.
-        If one or both of the encoders is already fitted, it will not be
+        - Both encoders should have the same `encode_as` parameter.
+        - If one or both of the encoders is already fitted, it will not be
         re-fitted during `fit` or `fit_transform`.
     """
 
     def __init__(
         self, encoder_left: CategoricalEncoder, encoder_right: CategoricalEncoder
     ):
-        if not isinstance(encoder_left, CategoricalEncoder) or not isinstance(
-            encoder_right, CategoricalEncoder
+        if (not isinstance(encoder_left, CategoricalEncoder)) or (
+            not isinstance(encoder_right, CategoricalEncoder)
         ):
             raise ValueError(
                 "This pairwise interaction encoder expects `CategoricalEncoder` encoders"
@@ -1369,8 +984,8 @@ class ISplineEncoder(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, encoder_left: SplineEncoder, encoder_right: SplineEncoder):
-        if not isinstance(encoder_left, SplineEncoder) or not isinstance(
-            encoder_right, SplineEncoder
+        if (not isinstance(encoder_left, SplineEncoder)) or (
+            not isinstance(encoder_right, SplineEncoder)
         ):
             raise ValueError(
                 "This pairwise interaction encoder expects `SplineEncoder` encoders"
@@ -1442,8 +1057,8 @@ class ProductEncoder(TransformerMixin, BaseEstimator):
     """
 
     def __init__(self, encoder_left: IdentityEncoder, encoder_right: IdentityEncoder):
-        if not isinstance(encoder_left, IdentityEncoder) or not isinstance(
-            encoder_right, IdentityEncoder
+        if (not isinstance(encoder_left, IdentityEncoder)) or (
+            not isinstance(encoder_right, IdentityEncoder)
         ):
             raise ValueError(
                 "This pairwise interaction encoder expects `IdentityEncoder` encoders"
@@ -1509,12 +1124,10 @@ class ICatLinearEncoder(TransformerMixin, BaseEstimator):
             The encoder for the categorical feature. It must encode features in
             an one-hot form.
         encoder_num : eensight.features.encode.IdentityEncoder
-            The encoder for the numerical feature. The encoder should have
-            `include_bias=True`. This is necessary so that so that it is possible
-            to model a different intercept for each categorical feature's level.
+            The encoder for the numerical feature.
 
     Note:
-        If the categorical encoder is already fitted, it will not be re-fitted during `fit`
+        If either encoder is already fitted, it will not be re-fitted during `fit`
         or `fit_transform`.
     """
 
@@ -1532,13 +1145,6 @@ class ICatLinearEncoder(TransformerMixin, BaseEstimator):
 
         if not isinstance(encoder_num, IdentityEncoder):
             raise ValueError("`encoder_num` must be an IdentityEncoder")
-
-        if not encoder_num.include_bias:
-            raise ValueError(
-                "The numerical encoder should have `include_bias=True`. This is "
-                "necessary so that so that it is possible to model a different "
-                "intercept for each categorical feature's level."
-            )
 
         self.encoder_cat = encoder_cat
         self.encoder_num = encoder_num
@@ -1593,14 +1199,13 @@ class ICatLinearEncoder(TransformerMixin, BaseEstimator):
 
 class ICatSplineEncoder(TransformerMixin, BaseEstimator):
     """Encode the interaction between one categorical and one spline-encoded numerical
-    feature. This encoder can also work with a cyclical numerical feature.
+    feature.
 
     Args:
         encoder_cat : eensight.features.encode.CategoricalEncoder
             The encoder for the categorical feature. It must encode features in
             an one-hot form.
-        encoder_num : eensight.features.encode.SplineEncoder or
-            eensight.features.encode.CyclicalFeatures
+        encoder_num : eensight.features.encode.SplineEncoder
             The encoder for the numerical feature.
 
     Notes:
@@ -1614,7 +1219,7 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
         self,
         *,
         encoder_cat: CategoricalEncoder,
-        encoder_num: Union[SplineEncoder, CyclicalFeatures],
+        encoder_num: SplineEncoder,
     ):
         if not isinstance(encoder_cat, CategoricalEncoder):
             raise ValueError("`encoder_cat` must be a CategoricalEncoder")
@@ -1625,10 +1230,8 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
                 "categorical feature"
             )
 
-        if not isinstance(encoder_num, (SplineEncoder, CyclicalFeatures)):
-            raise ValueError(
-                "`encoder_num` must be either a SplineEncoder or a CyclicalFeatures"
-            )
+        if not isinstance(encoder_num, SplineEncoder):
+            raise ValueError("`encoder_num` must be a SplineEncoder")
 
         self.encoder_cat = encoder_cat
         self.encoder_num = encoder_num
@@ -1686,7 +1289,7 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
         for i, encoder in self.num_encoders_.items():
             mask = cat_features.loc[:, i] == 1
             subset = X.loc[mask]
-            if subset.empty or not encoder.fitted_:
+            if subset.empty:
                 trf = pd.DataFrame(
                     data=np.zeros((X.shape[0], encoder.n_features_out_)), index=X.index
                 )
