@@ -20,6 +20,17 @@ from .settings import DEFAULT_CATALOG, DEFAULT_MODEL, DEFAULT_PARAMETERS, PROJEC
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
+def dot_string_to_dict(in_dict):
+    tree = {}
+    for key, value in in_dict.items():
+        t = tree
+        parts = key.split(".")
+        for part in parts[:-1]:
+            t = t.setdefault(part, {})
+        t[parts[-1]] = value
+    return tree
+
+
 @hydra.main(config_path="hydra", config_name="run_config")
 def run(cfg: DictConfig):
     cfg = OmegaConf.to_container(cfg)
@@ -38,7 +49,12 @@ def run(cfg: DictConfig):
 
     inject.configure(bind_values)
 
-    extra_params = cfg.get("params")
+    extra_params = {}
+    params = cfg.get("params")
+    if params is not None:
+        for key, value in params.items():
+            extra_params.update(dot_string_to_dict({key: value}))
+
     env = cfg.get("env") or "local"
     is_async = bool(cfg.get("async"))
 

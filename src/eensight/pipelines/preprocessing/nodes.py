@@ -129,7 +129,7 @@ def linear_inpute_missing(data, parameters):
 
 
 ############################################################################################
-# Data adequacy
+# Check data adequacy
 ############################################################################################
 
 
@@ -150,10 +150,13 @@ def check_data_adequacy(data):
         avail_data[month_year] = check.result["unexpected_percent"]
 
     avail_data = {f"{key[0]}M{key[1]}": val for key, val in avail_data.items()}
-    avail_data = pd.DataFrame.from_dict(avail_data, orient="index", columns=["values"])
-    avail_data = avail_data[avail_data["values"] > 0.1]
+    avail_data = pd.DataFrame.from_dict(
+        avail_data, orient="index", columns=["availability"]
+    )
+    insufficient = avail_data[avail_data["availability"] > 0.1]
 
-    if len(avail_data) > 0:
+    if len(insufficient) > 0:
         logger.warning(
-            f"Months with not enough data are:\n {as_series(avail_data).to_dict()}"
+            f"Months with not enough data are:\n {as_series(insufficient).to_dict()}"
         )
+    return avail_data

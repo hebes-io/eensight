@@ -19,16 +19,15 @@ global_filter:
     allow_negative: true
 
 decompose_consumption:
-  trend: ct 
-  alpha: 0.1
-  missing: drop
+  dt: null 
+  add_trend: false
+  alpha: 1
   return_conditions: false
   return_model: false
 
 decompose_temperature:
-  trend: c
-  alpha: 0.1
-  missing: drop
+  dt: null 
+  alpha: 1
   return_model: false
 
 global_outlier_detect:

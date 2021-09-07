@@ -18,6 +18,7 @@ from kedro.framework.context.context import (
 from kedro.framework.hooks import get_hook_manager
 from kedro.io import DataCatalog
 from kedro.versioning import Journal
+from mergedeep import merge
 
 from .validation import parse_model_config
 
@@ -74,7 +75,7 @@ class CustomContext(KedroContext):
             warn(f"Parameters not found in your Kedro project config.\n{str(exc)}")
             conf_params = {}
 
-        conf_params.update(self._extra_params or {})
+        conf_params = merge({}, conf_params, self._extra_params or {})
         return conf_params
 
     def _get_catalog(
@@ -144,7 +145,7 @@ class CustomContext(KedroContext):
                 f"**/models/{selected_model}*",
             )
             model_structure = parse_model_config(conf_model)
-            catalog.add_feed_dict(dict(model=model_structure))
+            catalog.add_feed_dict(dict(model_structure=model_structure))
 
         if catalog.layers:
             _validate_layers_for_transcoding(catalog)

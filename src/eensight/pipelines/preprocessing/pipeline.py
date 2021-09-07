@@ -43,7 +43,7 @@ preprocess = Pipeline(
         node(
             func=check_data_adequacy,
             inputs="preprocessed_data",
-            outputs=None,
+            outputs="data_adequacy",
             name="check_data_adequacy",
         ),
     ]
@@ -54,7 +54,6 @@ preprocess_train = pipeline(
     inputs=["rebind_names", "location"],  # don't namespace
     namespace="train",
 )
-
 
 preprocess_test = pipeline(
     pipeline(

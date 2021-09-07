@@ -157,10 +157,10 @@ class ABCDistanceEnsemble(BaseEnsemble, metaclass=ABCMeta):
         weight_method : str, default='softmin'
             Defines the way individual predictions from the estimators are weighted so that to
             generate the final prediction. It can be 'softmin' or 'argmin'.
-        cache_location : str, pathlib.Path or None
+        cache_location : str, pathlib.Path or None, default=None,
             The path to use as a data store for the metric calculations. If None is given, no
             caching of the calculations is done.
-        alpha : float (default=0.1)
+        alpha : float, default=0.1
             Regularization strength of the underlying ridge regression; must be a positive float.
             Regularization improves the conditioning of the problem and reduces the variance of
             the estimates. Larger values specify stronger regularization.
@@ -201,7 +201,6 @@ class ABCDistanceEnsemble(BaseEnsemble, metaclass=ABCMeta):
         )
 
         self.metric_ = Memory(cache_location, verbose=0).cache(distance_metric)
-        
 
     @abstractmethod
     def _get_anchors(self, X):

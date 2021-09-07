@@ -634,6 +634,9 @@ class CategoricalEncoder(TransformerMixin, BaseEstimator):
         self.encode_as = encode_as
         self.excluded_categories_ = as_list(excluded_categories)
 
+    def _to_pandas(self, x):
+        return pd.DataFrame(x, columns=[self.feature])
+
     def fit(self, X, y=None):
         """
         Args:
@@ -703,9 +706,7 @@ class CategoricalEncoder(TransformerMixin, BaseEstimator):
                     ),
                     (
                         "to_pandas",
-                        FunctionTransformer(
-                            lambda x: pd.DataFrame(x, columns=[self.feature])
-                        ),
+                        FunctionTransformer(self._to_pandas),
                     ),
                     (
                         "encode_features",
@@ -1289,7 +1290,7 @@ class ICatSplineEncoder(TransformerMixin, BaseEstimator):
         for i, encoder in self.num_encoders_.items():
             mask = cat_features.loc[:, i] == 1
             subset = X.loc[mask]
-            if subset.empty:
+            if subset.empty or (not encoder.fitted_):
                 trf = pd.DataFrame(
                     data=np.zeros((X.shape[0], encoder.n_features_out_)), index=X.index
                 )

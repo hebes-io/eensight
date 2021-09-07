@@ -1,4 +1,10 @@
 
+add_features:
+  time:
+    feature: null 
+    type: datetime
+    remainder: passthrough
+    subset: month, hourofweek
 
 regressors:
   month:
@@ -6,7 +12,6 @@ regressors:
     type: categorical
     max_n_categories: null
     encode_as: onehot 
-    interaction_only: false
   
   tow:
     feature: hourofweek
@@ -14,29 +19,29 @@ regressors:
     max_n_categories: null 
     stratify_by: null 
     excluded_categories: null 
-    unknown_value: null
-    min_samples_leaf: null  
-    max_features: null 
     encode_as: onehot 
-    interaction_only: false
   
-  temperature:
+  lin_temperature:
     feature: temperature
     type: linear
-    include_bias: false
+    include_bias: false 
+
+  spl_temperature:
+    feature: temperature
+    type: spline
+    n_knots: 4
+    degree: 2
+    strategy: quantile
+    extrapolation: constant
+    interaction_only: True
 
 interactions:
-  tow, temperature:
+  tow, spl_temperature:
     tow:
       max_n_categories: 5
       stratify_by: temperature 
       min_samples_leaf: 20
-    temperature:
-      type: spline
-      n_knots: 4
-      degree: 2
-      strategy: quantile
-      extrapolation: constant
+
 
 
 

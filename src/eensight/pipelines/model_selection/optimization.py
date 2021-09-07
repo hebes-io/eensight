@@ -37,7 +37,7 @@ def optimize(
     optimization_space=None,
     multivariate=False,
     out_of_sample=True,
-    verbose=False,
+    verbose=True,
     tags=None,
     **opt_space_kwards
 ):
@@ -46,7 +46,7 @@ def optimize(
 
     Args:
         estimator : Any regressor with scikit-learn API (i.e. with fit and
-            predict methods) 
+            predict methods)
             The object to use to fit the data.
         X : pandas dataframe of shape (n_samples, n_features)
             The input data to optimize on.
@@ -100,7 +100,7 @@ def optimize(
         out_of_sample: bool, default=True
             Whether the optimization should be based on out-of-sample (if `True`) or
             in-sample (if `False`) performance.
-        verbose : bool, default=False
+        verbose : bool, default=True
             Flag to show progress bars or not.
         tags: str or list of str, default=None
             Tags are returned by the function as-is and are useful as a way to distinguish

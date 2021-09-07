@@ -125,6 +125,7 @@ def fit_and_score(
     X_test,
     y_test,
     scorers,
+    target_name="consumption",
     fit_params=None,
     return_estimator=False,
 ):
@@ -143,6 +144,10 @@ def fit_and_score(
             The testing target data.
         scorers : A dict mapping scorer name to a callable. The callable
             object / fn should have signature ``scorer(y_true, y_pred)``.
+        target_name : str, default='consumption'
+            It is expected that both y and the predictions of the `estimator` are
+            dataframes with a single column, the name of which is the one provided
+            for `target_name`.
         fit_params : dict or None
             Parameters that will be passed to ``estimator.fit``.
         return_estimator : bool, default=False
@@ -167,7 +172,8 @@ def fit_and_score(
         y_true = y_test.loc[y_pred.index]
 
     result = {
-        name: np.array(scorer(y_true, y_pred)) for name, scorer in scorers.items()
+        name: np.array(scorer(y_true[target_name], y_pred[target_name]))
+        for name, scorer in scorers.items()
     }
 
     if return_estimator:
@@ -202,25 +208,25 @@ class CrossValidator(BaseEstimator):
         n_repeats : int (default=None)
             Number of times the cross-validation process needs to be repeated.
         target_name : str, default='consumption'
-                It is expected that both y and the predictions of the `estimator` are
-                dataframes with a single column, the name of which is the one provided
-                for `target_name`.
+            It is expected that both y and the predictions of the `estimator` are
+            dataframes with a single column, the name of which is the one provided
+            for `target_name`.
         scorers : dict, default=None
-                dict mapping scorer name to a callable. The callable object
-                should have signature ``scorer(y_true, y_pred)``.
-                The default value is:
-                `OrderedDict(
-                    {
-                        "CVRMSE": lambda y_true, y_pred:
-                            eensight.pipelines.model_selection.cvrmse(
-                                y_true[target_name], y_pred[target_name]
-                            ),
-                        "NMBE": lambda y_true, y_pred:
-                            eensight.pipelines.model_selection.nmbe(
-                                y_true[target_name], y_pred[target_name]
-                            )
-                    }
-                )`
+            dict mapping scorer name to a callable. The callable object
+            should have signature ``scorer(y_true, y_pred)``.
+            The default value is:
+            `OrderedDict(
+                {
+                    "CVRMSE": lambda y_true, y_pred:
+                        eensight.pipelines.model_selection.cvrmse(
+                            y_true[target_name], y_pred[target_name]
+                        ),
+                    "NMBE": lambda y_true, y_pred:
+                        eensight.pipelines.model_selection.nmbe(
+                            y_true[target_name], y_pred[target_name]
+                        )
+                }
+            )`
         keep_estimators : bool, default=False
             Whether to keep the fitted estimators per fold.
         n_jobs : int, default=None
@@ -261,7 +267,7 @@ class CrossValidator(BaseEstimator):
         scorers=None,
         keep_estimators=False,
         n_jobs=None,
-        verbose=0,
+        verbose=True,
         fit_params=None,
         pre_dispatch="2*n_jobs",
         random_state=None,
@@ -322,9 +328,20 @@ class CrossValidator(BaseEstimator):
         else:
             return self.estimator_oos_masks_
 
-    def fit(self, X, y):
+    def fit(self, X: pd.DataFrame, y: pd.DataFrame):
+        """
+        Args:
+            X : pd.DataFrame, shape (n_samples, n_features)
+                The input dataframe.
+            y : pd.DataFrame, shape (n_samples, 1)
+                The target dataframe.
+
+        Returns:
+            self : object
+                Returns self.
+        """
         try:
-            check_is_fitted(self, "cv_scores_")
+            check_is_fitted(self, "scores_")
         except NotFittedError:
             pass
         else:
@@ -333,16 +350,7 @@ class CrossValidator(BaseEstimator):
             )
 
         if self.scorers is None:
-            self.scorers = OrderedDict(
-                {
-                    "CVRMSE": lambda y_true, y_pred: cvrmse(
-                        y_true[self.target_name], y_pred[self.target_name]
-                    ),
-                    "NMBE": lambda y_true, y_pred: nmbe(
-                        y_true[self.target_name], y_pred[self.target_name]
-                    ),
-                }
-            )
+            self.scorers = OrderedDict({"CVRMSE": cvrmse, "NMBE": nmbe})
 
         splits = create_splits(
             X,
@@ -367,6 +375,7 @@ class CrossValidator(BaseEstimator):
                 X_test=X.iloc[test],
                 y_test=y.iloc[test],
                 scorers=self.scorers,
+                target_name=self.target_name,
                 fit_params=self.fit_params,
                 return_estimator=self.keep_estimators,
             )
@@ -382,9 +391,10 @@ class CrossValidator(BaseEstimator):
                     self.estimators_.append(estimator)
                     self.estimator_oos_masks_.append(X.index[test])
 
-        self.cv_scores_ = {
+        self.scores_ = {
             key: np.asarray([item[key] for item in results]).flatten()
             for key in results[0]
         }
 
+        self.fitted_ = True
         return self

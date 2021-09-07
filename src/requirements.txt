@@ -1,0 +1,15 @@
+holidays==0.11.2
+hydra-core==1.1.0
+Inject==4.3.1
+kedro==0.17.4
+marshmallow==3.13.0
+matplotlib==3.4.2
+mergedeep==1.3.4
+notebook==6.4.2
+numpy==1.21.1
+optuna==2.9.1
+pandas==1.3.1
+python==3.8.0
+scikit-learn==0.24.2
+scipy==1.7.1
+seaborn==0.11.1

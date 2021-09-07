@@ -24,6 +24,84 @@ sources:
         index_col: 0
     filename_suffix: '.csv'
 
+  train.preprocessed_data:
+    type: ${globals:types.csv}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.intermediate}/train/preprocessed.csv
+    load_args:
+      sep: ','
+      index_col : 0
+      parse_dates : 
+        - 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+
+  train.data_adequacy:
+    type: ${globals:types.csv}
+    filepath: >-
+      ${globals:data_root}/${site_name}/${globals:folders.report}/train/adequacy_check.csv
+    load_args:
+      sep: ','
+      index_col : 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+
+  train.base_model:
+    type: ${globals:types.pickle}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.model}/train/base_model.pickle
+    versioned : ${versioned}
+  
+  train.opt_scores:
+    type: ${globals:types.csv}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.report}/train/opt_scores.csv
+    load_args:
+      sep: ','
+      index_col : 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+
+  train.opt_params:
+    type: ${globals:types.csv}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.report}/train/opt_params.csv
+    load_args:
+      sep: ','
+      index_col : 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+  
+  train.pareto_ensemble_model:
+    type: ${globals:types.pickle}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.model}/train/pareto_ensemble_model.pickle
+    versioned : ${versioned}
+
+  train.pareto_ensemble_prediction:
+    type: ${globals:types.csv}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.model_output}/train/pareto_ensemble_prediction.csv
+    load_args:
+      sep: ','
+      index_col : 0
+      parse_dates : 
+        - 0
+    save_args:
+      index: true
+    versioned : ${versioned}
+  
+  train.cross_validator_model:
+    type: ${globals:types.pickle}
+    filepath: >- 
+      ${globals:data_root}/${site_name}/${globals:folders.model}/train/cross_validator_model.pickle
+    versioned : ${versioned}
+
+
   test.root_input:
     type: ${globals:types.multiple}
     path: ${globals:data_root}/${site_name}/${globals:folders.raw}/test
@@ -34,18 +112,6 @@ sources:
         index_col: 0
     filename_suffix: '.csv'
   
-  train.preprocessed_data:
-    type: ${globals:types.csv}
-    filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/train/preprocessed.csv
-    load_args:
-      sep: ','
-      index_col : 0
-      parse_dates : 
-        - 0
-    save_args:
-      index: true
-    versioned : ${versioned}
-
   test.preprocessed_data:
     type: ${globals:types.csv}
     filepath: ${globals:data_root}/${site_name}/${globals:folders.intermediate}/test/preprocessed.csv
