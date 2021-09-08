@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import math
 import traceback
 from collections import OrderedDict
 from functools import partial
@@ -328,6 +329,14 @@ class CrossValidator(BaseEstimator):
         else:
             return self.estimator_oos_masks_
 
+    @property
+    def n_parameters(self):
+        check_is_fitted(self, "fitted_")
+        n_parameters = 0
+        for i, est in enumerate(self.estimators_):
+            n_parameters += est.n_parameters
+        return math.ceil(n_parameters / (i + 1))
+
     def fit(self, X: pd.DataFrame, y: pd.DataFrame):
         """
         Args:
@@ -398,3 +407,31 @@ class CrossValidator(BaseEstimator):
 
         self.fitted_ = True
         return self
+
+    def predict(self, X: pd.DataFrame, include_components=False):
+        """
+        Args:
+            X : pd.DataFrame, shape (n_samples, n_features)
+                The input dataframe.
+        """
+        check_is_fitted(self, "fitted_")
+
+        try:
+            self.estimators_
+        except AttributeError as exc:
+            raise ValueError(
+                "Prediction is possible only if the model is fitted "
+                "with `keep_estimators=True`"
+            ) from exc
+
+        parallel = Parallel(n_jobs=self.n_jobs)
+        results = parallel(
+            delayed(est.predict)(X, include_components=include_components)
+            for est in self.estimators_
+        )
+
+        prediction = None
+        for i, result in enumerate(results):
+            prediction = result if prediction is None else prediction + result
+
+        return prediction / (i + 1)
