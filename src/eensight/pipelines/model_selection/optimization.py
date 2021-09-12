@@ -12,6 +12,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from sklearn.base import clone
+from sklearn.metrics import explained_variance_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import Bunch
 
@@ -19,7 +20,7 @@ warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
 from .cross_validation import create_groups
-from .metrics import cvrmse, nmbe
+from .metrics import cvrmse
 
 
 def optimize(
@@ -27,8 +28,8 @@ def optimize(
     X,
     y,
     *,
-    n_repeats=2,
-    test_size=0.2,
+    n_repeats=1,
+    test_size=0.25,
     target_name="consumption",
     budget=20,
     timeout=None,
@@ -52,9 +53,9 @@ def optimize(
             The input data to optimize on.
         y : pandas dataframe of shape of shape (n_samples, 1)
             The training target data to optimize on.
-        n_repeats : int, default=2
+        n_repeats : int, default=1
             Number of times to repeat the train/test data split process process.
-        test_size : float, default=0.2
+        test_size : float, default=0.25
             The proportion of the dataset to include in the test split. Should be between
             0.0 and 1.0.
         target_name : str, default='consumption'
@@ -79,17 +80,15 @@ def optimize(
                         eensight.pipelines.model_selection.cvrmse(
                             y_true[target_name], y_pred[target_name]
                         ),
-                    "AbsNMBE": lambda y_true, y_pred: np.abs(
-                        eensight.pipelines.model_selection.nmbe(
-                            y_true[target_name], y_pred[target_name]
-                        )
+                    "ExVAR": lambda y_true, y_pred: sklearn.metrics.explained_variance_score(
+                        y_true[target_name], y_pred[target_name]
                     ),
                 }
             )`
         directions : list, default=None
             A sequence of directions during multi-objective optimization. Set
             ``minimize`` for minimization and ``maximize`` for maximization.
-            The default value is ['minimize', 'minimize'].
+            The default value is ['minimize', 'maximize'].
         optimization_space : callable, default=None
             A function that takes an `optuna.trial.Trial` as input and returns
             a parameter combination to try. If it is None, the `estimator` should
@@ -128,12 +127,12 @@ def optimize(
                 "CVRMSE": lambda y_true, y_pred: cvrmse(
                     y_true[target_name], y_pred[target_name]
                 ),
-                "AbsNMBE": lambda y_true, y_pred: np.abs(
-                    nmbe(y_true[target_name], y_pred[target_name])
+                "ExVAR": lambda y_true, y_pred: explained_variance_score(
+                    y_true[target_name], y_pred[target_name]
                 ),
             }
         )
-        directions = ["minimize", "minimize"]
+        directions = ["minimize", "maximize"]
     else:
         scorers = OrderedDict(scorers)
 

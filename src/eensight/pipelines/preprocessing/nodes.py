@@ -67,9 +67,9 @@ def find_outliers(data, parameters):
 
         resid = None
         if col == "consumption":
-            params = parameters["decompose_consumption"]
+            params = parameters["seasonal_decompose"][col]
             results = decompose_consumption(
-                data["consumption"].dropna().to_frame("consumption"),
+                data[[col]].dropna(),
                 dt=params["dt"],
                 add_trend=params["add_trend"],
                 alpha=params["alpha"],
@@ -79,9 +79,9 @@ def find_outliers(data, parameters):
             resid = results.transformed["resid"]
 
         if col == "temperature":
-            params = parameters["decompose_temperature"]
+            params = parameters["seasonal_decompose"][col]
             results = decompose_temperature(
-                data["temperature"].dropna().to_frame("temperature"),
+                data[[col]].dropna(),
                 dt=params["dt"],
                 alpha=params["alpha"],
                 return_model=params["return_model"],
@@ -95,10 +95,16 @@ def find_outliers(data, parameters):
         outliers_global = global_outlier_detect(resid, params["c"])
         params = parameters["local_outlier_detect"]
         outliers_local = local_outlier_detect(resid, params["min_samples"], params["c"])
-        outliers = np.logical_and(outliers_global, outliers_local)
 
-        data[f"{col}_outlier"] = outliers
-        data[f"{col}_outlier"] = data[f"{col}_outlier"].fillna(value=False)
+        no_outliers = np.logical_or(outliers_global == 0, outliers_local == 0)
+        outlier_score = outliers_global + outliers_local
+        outlier_score = outlier_score.mask(no_outliers, 0)
+
+        n_outliers = int(parameters["max_outlier_pct"] * len(data))
+        outliers = outlier_score[outlier_score > 0].nlargest(n_outliers)
+
+        data[f"{col}_outlier"] = False
+        data.loc[outliers.index, f"{col}_outlier"] = True
 
     return data
 
@@ -126,6 +132,10 @@ def linear_inpute_missing(data, parameters):
     for col, params in parameters["linear_impute"].items():
         data[col] = linear_impute(data[col], window=params["window"])
     return data
+
+
+def drop_missing_data(data):
+    return data.dropna()
 
 
 ############################################################################################

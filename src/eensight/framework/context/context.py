@@ -67,9 +67,9 @@ class CustomContext(KedroContext):
                 conf_params = {}
             else:
                 conf_params = self.config_loader.get(
-                    f"parameters/{selected_params}*",
+                    f"parameters/{selected_params}.*",
                     f"parameters/{selected_params}*/**",
-                    f"**/parameters/{selected_params}*",
+                    f"**/parameters/{selected_params}.*",
                 )
         except MissingConfigException as exc:
             warn(f"Parameters not found in your Kedro project config.\n{str(exc)}")
@@ -99,9 +99,9 @@ class CustomContext(KedroContext):
             raise KedroContextError("No catalog configuration has been selected.")
 
         conf_catalog = self.config_loader.get(
-            f"catalog*/{selected_catalog}*",
+            f"catalog*/{selected_catalog}.*",
             f"catalog*/{selected_catalog}*/**",
-            f"**/catalog*/{selected_catalog}*",
+            f"**/catalog*/{selected_catalog}.*",
         )
 
         rebind_names = {}
@@ -140,9 +140,9 @@ class CustomContext(KedroContext):
 
         if selected_model is not None:
             conf_model = self.config_loader.get(
-                f"models/{selected_model}*",
+                f"models/{selected_model}.*",
                 f"models/{selected_model}*/**",
-                f"**/models/{selected_model}*",
+                f"**/models/{selected_model}.*",
             )
             model_structure = parse_model_config(conf_model)
             catalog.add_feed_dict(dict(model_structure=model_structure))

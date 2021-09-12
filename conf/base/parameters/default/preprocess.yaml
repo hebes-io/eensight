@@ -18,17 +18,17 @@ global_filter:
     allow_zero: true
     allow_negative: true
 
-decompose_consumption:
-  dt: null 
-  add_trend: false
-  alpha: 1
-  return_conditions: false
-  return_model: false
-
-decompose_temperature:
-  dt: null 
-  alpha: 1
-  return_model: false
+seasonal_decompose:
+  consumption:
+    dt: null 
+    add_trend: false
+    alpha: 1
+    return_conditions: false
+    return_model: false
+  temperature:
+    dt: null 
+    alpha: 1
+    return_model: false
 
 global_outlier_detect:
   c: 5
@@ -36,6 +36,8 @@ global_outlier_detect:
 local_outlier_detect:
   min_samples: 0.6 
   c: 5
+
+max_outlier_pct: 0.005
 
 linear_impute:
   temperature:

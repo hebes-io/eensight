@@ -23,7 +23,7 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
     Args:
         model_structure : dict
             The model configuration
-        alpha : float (default=0.1)
+        alpha : float (default=0.01)
             Regularization strength of the underlying ridge regression; must be a positive float.
             Regularization improves the conditioning of the problem and reduces the variance of
             the estimates. Larger values specify stronger regularization.
@@ -33,7 +33,7 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
     """
 
     def __init__(
-        self, *, model_structure: Dict[str, Dict], alpha=0.1, fit_intercept=False
+        self, *, model_structure: Dict[str, Dict], alpha=0.01, fit_intercept=False
     ):
         self.model_structure = model_structure
         self.alpha = alpha
@@ -43,14 +43,14 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
     @property
     def n_parameters(self):
         try:
-            check_is_fitted(self, "base_estimator_")
-        except NotFittedError as exc:
+            self.n_parameters_
+        except AttributeError as exc:
             raise ValueError(
                 "The number of parameters is acceccible only after "
                 "the model has been fitted"
             ) from exc
         else:
-            return self.composer_.n_parameters
+            return self.n_parameters_
 
     def fit(self, X: pd.DataFrame, y: Union[pd.DataFrame, pd.Series]):
         try:
@@ -67,6 +67,8 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
         self.target_name_ = y.columns[0]
 
         design_matrix = self.composer_.fit_transform(X, y)
+        self.n_parameters_ = np.linalg.matrix_rank(design_matrix)
+
         if self.alpha is None:
             self.base_estimator_ = LinearRegression(fit_intercept=self.fit_intercept)
         else:

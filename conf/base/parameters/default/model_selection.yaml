@@ -1,27 +1,24 @@
 # parameters for the `optimize` pipeline
 
 optimize_model:
-  # base model
-  weight_method: softmin
-  cache_location: null 
-  alpha: 0.1
-  fit_intercept: false 
-  # optimization
-  budget: 20
-  test_size: 0.2
-  n_repeats: 2
+  group_feature: cluster
+  budget: 15
+  test_size: 0.25
+  n_repeats: 1
   out_of_sample: true 
 
-create_pareto_ensemble:
-  evaluate_with_outliers: true
+  clusterer:
+    min_samples: 5
+    n_neighbors: 1
+    weights: uniform
+
+  grouped:
+    alpha: 0.01
+
+create_ensemble:
   include_components: true 
 
-cross_validate_model:
-  evaluate_with_outliers: true
-  group_by: week
-  stratify_by: month
-  n_splits: 3
-  n_repeats: 5
-  keep_estimators: true 
-  n_jobs: -1 
+apply_ensemble:
+  include_components: true
+
 

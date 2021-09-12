@@ -50,12 +50,12 @@ def global_filter(
 
 
 def global_outlier_detect(X: pd.Series, c: float = 5) -> pd.Series:
-    loc = X.median()
+    X = X / X.median()
     scale = X.mad()
 
-    return np.logical_and(
-        X.notnull(), np.logical_or(X > loc + c * scale, X < loc - c * scale)
-    )
+    outlier_score = np.maximum(np.abs(X - 1) - c * scale, 0)
+    outlier_score = outlier_score.fillna(value=0)
+    return outlier_score
 
 
 def local_outlier_detect(
@@ -69,14 +69,13 @@ def local_outlier_detect(
 
     median_daily = X.groupby(lambda x: x.date).median().to_dict()
     median_daily = dates.map(lambda x: median_daily[x.date()])
+    X = X / median_daily
+
     mad_daily = X.groupby(lambda x: x.date).mad().to_dict()
     mad_daily = dates.map(lambda x: mad_daily[x.date()])
     count_daily = X.groupby(lambda x: x.date).count().to_dict()
     count_daily = dates.map(lambda x: count_daily[x.date()])
 
-    return np.logical_and(
-        count_daily > min_samples,
-        np.logical_or(
-            X > median_daily + c * mad_daily, X < median_daily - c * mad_daily
-        ),
-    )
+    outlier_score = np.maximum(np.abs(X - 1) - c * mad_daily, 0)
+    outlier_score = outlier_score.mask(count_daily < min_samples, 0)
+    return outlier_score

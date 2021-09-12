@@ -216,6 +216,7 @@ def parse_model_config(config):
         "main_effects": defaultdict(dict),
         "interactions": defaultdict(dict),
     }
+    temporary = {}
 
     if "add_features" in config:
         for name, props in config["add_features"].items():
@@ -223,7 +224,11 @@ def parse_model_config(config):
 
     if "regressors" in config:
         for name, props in config["regressors"].items():
-            model_structure["main_effects"][name] = _validated_props(props)
+            props = _validated_props(props)
+            if props.get("interaction_only"):
+                temporary[name] = props
+            else:
+                model_structure["main_effects"][name] = _validated_props(props)
 
     if "interactions" in config:
         # example of pair_name: temperature, hour
@@ -231,6 +236,8 @@ def parse_model_config(config):
             pair_name = tuple([x.strip() for x in pair_name.split(",")])
             if len(pair_name) != 2:
                 raise ValueError("Only pairwise interactions are supported.")
+            if pair_props is None:
+                pair_props = {}
 
             for name in pair_name:
                 if name in model_structure["main_effects"]:
@@ -241,8 +248,14 @@ def parse_model_config(config):
                     model_structure["interactions"][pair_name].update(
                         {f"{name}": _validated_props(props)}
                     )
-                    if model_structure["main_effects"][name]["interaction_only"]:
-                        del model_structure["main_effects"][name]
+                elif name in temporary:
+                    props = dict(
+                        temporary[name],
+                        **pair_props.get(name, dict()),
+                    )
+                    model_structure["interactions"][pair_name].update(
+                        {f"{name}": _validated_props(props)}
+                    )
                 elif name in pair_props:
                     model_structure["interactions"][pair_name].update(
                         {f"{name}": _validated_props(pair_props[name])}

@@ -30,7 +30,7 @@ def load_catalog(catalog, model=None, parameters=None, env="local"):
     )
 
     conf_catalog = config_loader.get(
-        f"catalog*/{catalog}*", f"catalog*/{catalog}*/**", f"**/catalog*/{catalog}*"
+        f"catalog*/{catalog}.*", f"catalog*/{catalog}*/**", f"**/catalog*/{catalog}.*"
     )
 
     rebind_names = {}
@@ -52,16 +52,16 @@ def load_catalog(catalog, model=None, parameters=None, env="local"):
 
     if model is not None:
         conf_model = config_loader.get(
-            f"models/{model}*", f"models/{model}*/**", f"**/models/{model}*"
+            f"models/{model}.*", f"models/{model}*/**", f"**/models/{model}.*"
         )
         model_structure = parse_model_config(conf_model)
         catalog.add_feed_dict(dict(model_structure=model_structure))
 
     if parameters is not None:
         conf_params = config_loader.get(
-            f"parameters/{parameters}*",
+            f"parameters/{parameters}.*",
             f"parameters/{parameters}*/**",
-            f"**/parameters/{parameters}*",
+            f"**/parameters/{parameters}.*",
         )
         catalog.add_feed_dict(dict(parameters=conf_params))
         params = pd.json_normalize(conf_params, sep=".")

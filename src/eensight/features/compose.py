@@ -27,6 +27,95 @@ from .encode import (
 from .generate import CyclicalFeatures, DatetimeFeatures, TrendFeatures
 
 
+def encoder_by_type(enc_type, props):
+    if enc_type == "trend":
+        return TrendFeatures(
+            feature=props.get("feature"),
+            include_bias=props.get("include_bias", False),
+            remainder=props.get("remainder", "passthrough"),
+            replace=props.get("replace", False),
+        )
+    elif enc_type == "datetime":
+        return DatetimeFeatures(
+            feature=props.get("feature"),
+            remainder=props.get("remainder", "passthrough"),
+            replace=props.get("replace", False),
+            subset=None
+            if not props.get("subset")
+            else list(map(str.strip, props.get("subset").split(",")))
+            if isinstance(props.get("subset"), str)
+            else props.get("subset"),
+        )
+    elif enc_type == "cyclical":
+        return CyclicalFeatures(
+            seasonality=props.get("seasonality"),
+            feature=props.get("feature"),
+            period=props.get("period"),
+            fourier_order=props.get("fourier_order"),
+            remainder=props.get("remainder", "passthrough"),
+            replace=props.get("replace", False),
+        )
+    elif enc_type == "categorical":
+        return CategoricalEncoder(
+            feature=props.get("feature"),
+            max_n_categories=props.get("max_n_categories"),
+            stratify_by=[]
+            if not props.get("stratify_by")
+            else list(map(str.strip, props.get("stratify_by").split(",")))
+            if isinstance(props.get("stratify_by"), str)
+            else props.get("stratify_by"),
+            excluded_categories=[]
+            if not props.get("excluded_categories")
+            else list(map(str.strip, props.get("excluded_categories").split(",")))
+            if isinstance(props.get("excluded_categories"), str)
+            else props.get("excluded_categories"),
+            unknown_value=props.get("unknown_value"),
+            min_samples_leaf=props.get("min_samples_leaf", 1),
+            max_features=props.get("max_features", "auto"),
+            random_state=props.get("random_state"),
+            encode_as=props.get("encode_as", "onehot"),
+        )
+    elif enc_type == "spline":
+        return SplineEncoder(
+            feature=props.get("feature"),
+            n_knots=props.get("n_knots", 5),
+            degree=props.get("degree", 3),
+            strategy=props.get("strategy", "quantile"),
+            extrapolation=props.get("extrapolation", "constant"),
+            include_bias=props.get("include_bias", True),
+        )
+    elif enc_type == "linear":
+        return IdentityEncoder(
+            feature=props.get("feature"),
+            as_filter=props.get("as_filter", False),
+            include_bias=props.get("include_bias", False),
+        )
+    else:
+        raise ValueError(f"Encoder type {enc_type} not supported")
+
+
+def interaction_by_types(left_enc, right_enc, left_enc_type, right_enc_type):
+    if (left_enc_type, right_enc_type) == ("categorical", "categorical"):
+        return ICatEncoder(left_enc, right_enc)
+    elif (left_enc_type, right_enc_type) == ("categorical", "linear"):
+        return ICatLinearEncoder(encoder_cat=left_enc, encoder_num=right_enc)
+    elif (left_enc_type, right_enc_type) == ("categorical", "spline"):
+        return ICatSplineEncoder(encoder_cat=left_enc, encoder_num=right_enc)
+    elif (left_enc_type, right_enc_type) == ("linear", "linear"):
+        return ProductEncoder(left_enc, right_enc)
+    elif (left_enc_type, right_enc_type) == ("linear", "categorical"):
+        return ICatLinearEncoder(encoder_cat=right_enc, encoder_num=left_enc)
+    elif (left_enc_type, right_enc_type) == ("spline", "spline"):
+        return ISplineEncoder(left_enc, right_enc)
+    elif (left_enc_type, right_enc_type) == ("spline", "categorical"):
+        return ICatSplineEncoder(encoder_cat=right_enc, encoder_num=left_enc)
+    else:
+        raise NotImplementedError(
+            f"Interactions between encoder type `{left_enc_type}` "
+            f"and encoder type `{right_enc_type}` are not supported"
+        )
+
+
 class LinearModelFeatures(TransformerMixin, BaseEstimator):
     """A transformer that generates linear features and pairwise interactions.
 
@@ -49,95 +138,6 @@ class LinearModelFeatures(TransformerMixin, BaseEstimator):
         }
         self.train_feature_cols_ = []
         self.component_names_ = []
-
-    @staticmethod
-    def encoder_by_type(enc_type, props):
-        if enc_type == "trend":
-            return TrendFeatures(
-                feature=props.get("feature"),
-                include_bias=props.get("include_bias", False),
-                remainder=props.get("remainder", "passthrough"),
-                replace=props.get("replace", False),
-            )
-        elif enc_type == "datetime":
-            return DatetimeFeatures(
-                feature=props.get("feature"),
-                remainder=props.get("remainder", "passthrough"),
-                replace=props.get("replace", False),
-                subset=None
-                if not props.get("subset")
-                else list(map(str.strip, props.get("subset").split(",")))
-                if isinstance(props.get("subset"), str)
-                else props.get("subset"),
-            )
-        elif enc_type == "cyclical":
-            return CyclicalFeatures(
-                seasonality=props.get("seasonality"),
-                feature=props.get("feature"),
-                period=props.get("period"),
-                fourier_order=props.get("fourier_order"),
-                remainder=props.get("remainder", "passthrough"),
-                replace=props.get("replace", False),
-            )
-        elif enc_type == "categorical":
-            return CategoricalEncoder(
-                feature=props.get("feature"),
-                max_n_categories=props.get("max_n_categories"),
-                stratify_by=[]
-                if not props.get("stratify_by")
-                else list(map(str.strip, props.get("stratify_by").split(",")))
-                if isinstance(props.get("stratify_by"), str)
-                else props.get("stratify_by"),
-                excluded_categories=[]
-                if not props.get("excluded_categories")
-                else list(map(str.strip, props.get("excluded_categories").split(",")))
-                if isinstance(props.get("excluded_categories"), str)
-                else props.get("excluded_categories"),
-                unknown_value=props.get("unknown_value"),
-                min_samples_leaf=props.get("min_samples_leaf", 1),
-                max_features=props.get("max_features", "auto"),
-                random_state=props.get("random_state"),
-                encode_as=props.get("encode_as", "onehot"),
-            )
-        elif enc_type == "spline":
-            return SplineEncoder(
-                feature=props.get("feature"),
-                n_knots=props.get("n_knots", 5),
-                degree=props.get("degree", 3),
-                strategy=props.get("strategy", "quantile"),
-                extrapolation=props.get("extrapolation", "constant"),
-                include_bias=props.get("include_bias", True),
-            )
-        elif enc_type == "linear":
-            return IdentityEncoder(
-                feature=props.get("feature"),
-                as_filter=props.get("as_filter", False),
-                include_bias=props.get("include_bias", False),
-            )
-        else:
-            raise ValueError(f"Encoder type {enc_type} not supported")
-
-    @staticmethod
-    def interaction_by_types(left_enc, right_enc, left_enc_type, right_enc_type):
-        if (left_enc_type, right_enc_type) == ("categorical", "categorical"):
-            return ICatEncoder(left_enc, right_enc)
-        elif (left_enc_type, right_enc_type) == ("categorical", "linear"):
-            return ICatLinearEncoder(encoder_cat=left_enc, encoder_num=right_enc)
-        elif (left_enc_type, right_enc_type) == ("categorical", "spline"):
-            return ICatSplineEncoder(encoder_cat=left_enc, encoder_num=right_enc)
-        elif (left_enc_type, right_enc_type) == ("linear", "linear"):
-            return ProductEncoder(left_enc, right_enc)
-        elif (left_enc_type, right_enc_type) == ("linear", "categorical"):
-            return ICatLinearEncoder(encoder_cat=right_enc, encoder_num=left_enc)
-        elif (left_enc_type, right_enc_type) == ("spline", "spline"):
-            return ISplineEncoder(left_enc, right_enc)
-        elif (left_enc_type, right_enc_type) == ("spline", "categorical"):
-            return ICatSplineEncoder(encoder_cat=right_enc, encoder_num=left_enc)
-        else:
-            raise NotImplementedError(
-                f"Interactions between encoder type `{left_enc_type}` "
-                f"and encoder type `{right_enc_type}` are not supported"
-            )
 
     def add_new_feature(self, *, name, enc_type, feature=None, **kwargs):
         if name in self.model_structure_["add_features"]:
@@ -210,7 +210,7 @@ class LinearModelFeatures(TransformerMixin, BaseEstimator):
             )
         for _, props in self.model_structure_["add_features"].items():
             enc_type = props.get("type")
-            self.transformers_.append(self.encoder_by_type(enc_type, props))
+            self.transformers_.append(encoder_by_type(enc_type, props))
 
     def _create_encoders(self):
         if (self.model_structure is not None) and (
@@ -231,15 +231,15 @@ class LinearModelFeatures(TransformerMixin, BaseEstimator):
 
         for name, props in self.model_structure_["main_effects"].items():
             enc_type = props.get("type")
-            self.encoders_["main_effects"][name] = self.encoder_by_type(enc_type, props)
+            self.encoders_["main_effects"][name] = encoder_by_type(enc_type, props)
 
         for name, props in self.model_structure_["interactions"].items():
             left, right = name
             left_enc_type = props[left].get("type")
             right_enc_type = props[right].get("type")
-            left_enc = self.encoder_by_type(left_enc_type, props[left])
-            right_enc = self.encoder_by_type(right_enc_type, props[right])
-            interaction = self.interaction_by_types(
+            left_enc = encoder_by_type(left_enc_type, props[left])
+            right_enc = encoder_by_type(right_enc_type, props[right])
+            interaction = interaction_by_types(
                 left_enc, right_enc, left_enc_type, right_enc_type
             )
             self.encoders_["interactions"][name] = interaction
@@ -288,11 +288,6 @@ class LinearModelFeatures(TransformerMixin, BaseEstimator):
         ).sort_index(level="col")
 
         return feature_cols
-
-    @property
-    def n_parameters(self):
-        check_is_fitted(self, "fitted_")
-        return len(self.train_feature_cols_)
 
     def fit(self, X, y=None):
         try:

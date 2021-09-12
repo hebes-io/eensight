@@ -131,7 +131,7 @@ add_features:
     subset: month, hourofweek
 ```
 
-All feature generators create time-related features, and their output is a pandas `DataFrame`. Also, they all have two common parameters:
+All feature generators generate pandas `DataFrame`s. Also, they all have two common parameters:
 
 ```yaml
 remainder : str, :type : {'drop', 'passthrough'}, default='passthrough'
@@ -161,14 +161,21 @@ regressors:
     type: categorical
     max_n_categories: null
     encode_as: onehot 
-    interaction_only: false
     
   tow:                     # the name of the regressor
     feature: hourofweek    # the name of the feature 
     type: categorical
-    max_n_categories: null 
+    max_n_categories: 60 
     encode_as: onehot 
-    interaction_only: false
+    
+  flex_temperature:
+    feature: temperature
+    type: spline
+    n_knots: 5
+    degree: 1
+    strategy: uniform 
+    extrapolation: constant
+    interaction_only: true
 
 ```
  
@@ -187,17 +194,11 @@ Interactions can introduce new regressors, reuse regressors already defined in t
 
 ```yaml
 interactions:
-  tow, temperature:
+  tow, flex_temperature:
     tow:
-      max_n_categories: 5
+      max_n_categories: 2 
       stratify_by: temperature 
-      min_samples_leaf: 20
-    temperature:
-      type: spline
-      n_knots: 4
-      degree: 2
-      strategy: quantile
-      extrapolation: constant
+      min_samples_leaf: 15 
 ```
 
 ## Parameter values

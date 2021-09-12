@@ -8,6 +8,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import (
     check_data_adequacy,
+    drop_missing_data,
     find_outliers,
     linear_inpute_missing,
     outlier_to_nan,
@@ -41,9 +42,15 @@ preprocess = Pipeline(
             name="linear_inpute_missing",
         ),
         node(
+            func=drop_missing_data,
+            inputs="preprocessed_data",
+            outputs="model_input_data",
+            name="drop_missing_data",
+        ),
+        node(
             func=check_data_adequacy,
             inputs="preprocessed_data",
-            outputs="data_adequacy",
+            outputs="data_adequacy_summary",
             name="check_data_adequacy",
         ),
     ]
@@ -52,12 +59,15 @@ preprocess = Pipeline(
 preprocess_train = pipeline(
     preprocess,
     inputs=["rebind_names", "location"],  # don't namespace
+    outputs="data_adequacy_summary",  # don't namespace
     namespace="train",
 )
 
 preprocess_test = pipeline(
     pipeline(
-        preprocess.only_nodes("validate_input_data", "find_outliers"),
+        preprocess.only_nodes(
+            "validate_input_data", "find_outliers", "drop_missing_data"
+        ),
         outputs={"data_with_outliers": "preprocessed_data"},
     ),
     inputs=["rebind_names", "location"],  # don't namespace
