@@ -1,5 +1,5 @@
-<img align="left" width="300" src="https://github.com/hebes-io/eensight/blob/master/logo.png">
-
+<img align="left" width="200" src="https://github.com/hebes-io/eensight/blob/master/logo.png">
+<br>
 
 ## The `eensight` tool for measurement and verification of energy efficiency improvements
 <br>
