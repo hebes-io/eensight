@@ -14,4 +14,4 @@ The goal of the `eensight` tool is to contribute to the advancement of the autom
 
 `eensight` is a [Kedro](https://github.com/quantumblacklabs/kedro)-based application, and all its functionality is provided in the form of Kedro pipelines. The [notebooks/method_explanation](https://github.com/hebes-io/eensight/tree/master/notebooks/method_explanation) folder includes information on how `eensight` can be configured, what methods it utilizes and why it does things this way.  
 <br>
-<img align="left" width="100" height="100" src="https://github.com/hebes-io/eensight/blob/master/EC_support.png">
+<img align="left" width="500" src="https://github.com/hebes-io/eensight/blob/master/EC_support.png">
