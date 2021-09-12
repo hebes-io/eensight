@@ -1,7 +1,7 @@
-![logo](https://github.com/hebes-io/eensight/blob/master/logo.png =250x150)
+![logo](https://github.com/hebes-io/eensight/blob/master/logo.png)
+<br/><br/>
 
 ## The `eensight` tool for measurement and verification of energy efficiency improvements
-<br/><br/>
 
 The `eensight` Python package accompanies the deliverable <b>D7.1 Methods for the dynamic measurement and verification of energy savings</b> of the H2020 project [SENSEI Smart Energy Services to Improve the Energy Efficiency of the European Building Stock](https://senseih2020.eu/). The deliverable can be found at [Zenodo](https://zenodo.org/record/4695123#.YHiUD-gzY2w).
 
