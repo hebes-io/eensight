@@ -1,4 +1,4 @@
-<img align="left" width="100" height="100" src="https://github.com/hebes-io/eensight/blob/master/logo.png">
+<img align="left" width="300" src="https://github.com/hebes-io/eensight/blob/master/logo.png">
 <br>
 # The SENSEI workflow for measurement and verification of energy efficiency improvements
 <br>
