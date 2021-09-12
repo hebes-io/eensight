@@ -1,4 +1,4 @@
-[logo](https://github.com/hebes-io/eensight/blob/master/logo.png)
+[!logo](https://github.com/hebes-io/eensight/blob/master/logo.png)
 
 ## The `eensight` tool for measurement and verification of energy efficiency improvements
 <br/><br/>
