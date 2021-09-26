@@ -14,7 +14,7 @@ from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.utils.validation import check_is_fitted
 
 from eensight.features.compose import LinearModelFeatures
-from eensight.utils import as_list, check_X, check_y
+from eensight.utils import check_X, check_y
 
 
 class LinearPredictor(RegressorMixin, BaseEstimator):
@@ -52,6 +52,18 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
         else:
             return self.n_parameters_
 
+    @property
+    def dof(self):
+        try:
+            self.dof_
+        except AttributeError as exc:
+            raise ValueError(
+                "The degrees of freedom are acceccible only after "
+                "the model has been fitted"
+            ) from exc
+        else:
+            return self.dof_
+
     def fit(self, X: pd.DataFrame, y: Union[pd.DataFrame, pd.Series]):
         try:
             check_is_fitted(self, "base_estimator_")
@@ -67,7 +79,8 @@ class LinearPredictor(RegressorMixin, BaseEstimator):
         self.target_name_ = y.columns[0]
 
         design_matrix = self.composer_.fit_transform(X, y)
-        self.n_parameters_ = np.linalg.matrix_rank(design_matrix)
+        self.n_parameters_ = design_matrix.shape[1]
+        self.dof_ = np.linalg.matrix_rank(design_matrix)
 
         if self.alpha is None:
             self.base_estimator_ = LinearRegression(fit_intercept=self.fit_intercept)

@@ -1,8 +1,9 @@
 # parameters for the `optimize` pipeline
 
-optimize_model:
+for_optimize_model:
   group_feature: cluster
   budget: 15
+  timeout: null 
   test_size: 0.25
   n_repeats: 1
   out_of_sample: true 
@@ -15,10 +16,16 @@ optimize_model:
   grouped:
     alpha: 0.01
 
-create_ensemble:
-  include_components: true 
+include_components: true 
 
-apply_ensemble:
-  include_components: true
+for_cross_validate:
+  do_cross_validate: true
+  group_by: week
+  stratify_by: month
+  n_splits: 3
+  n_repeats: 5
+  n_jobs: 2
+
+
 
 

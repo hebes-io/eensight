@@ -1,11 +1,10 @@
 
-data_root : data
-
 types:
   csv      : pandas.CSVDataSet
-  json     : JSONDataSet
+  json     : json.JSONDataSet
   multiple : PartitionedDataSet
   pickle   : pickle.PickleDataSet
+  metric   : tracking.MetricsDataSet
 
 folders:
   raw           : 01_raw

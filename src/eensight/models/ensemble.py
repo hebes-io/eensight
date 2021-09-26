@@ -49,6 +49,26 @@ class EnsemblePredictor(BaseEnsemble):
             n_parameters += estimator.n_parameters
         return math.ceil(n_parameters / self.n_estimators)
 
+    @property
+    def dof(self):
+        try:
+            self.estimators_
+        except AttributeError as exc:
+            raise ValueError(
+                "The degrees of freedom are acceccible only after "
+                "the model has been fitted"
+            ) from exc
+
+        try:
+            self.estimators_[0].dof
+        except AttributeError as exc:
+            raise ValueError("Cannot propagate `dof` from base estimators") from exc
+
+        dof = 0
+        for estimator in self.estimators_:
+            dof += estimator.dof
+        return math.ceil(dof / self.n_estimators)
+
     def fit(self, X: pd.DataFrame, y: Union[pd.DataFrame, pd.Series]):
         try:
             check_is_fitted(self, "fitted_")

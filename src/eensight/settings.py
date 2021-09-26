@@ -23,14 +23,17 @@ CONTEXT_CLASS = CustomContext
 # Define the configuration folder. Defaults to `conf`
 CONF_ROOT = "conf"
 
-# Define the default catalog
-DEFAULT_CATALOG = "demo"
+# Define the data folder. Defaults to `data`
+DATA_ROOT = "data"
 
-# Define the default parameters
-DEFAULT_PARAMETERS = "default"
+# Define the default site name
+DEFAULT_CATALOG = "demo"
 
 # Define the default model
 DEFAULT_MODEL = "towt"
+
+# Define the default run configuration file
+DEFAULT_RUN_CONFIG = "default"
 
 SOURCE_PATH = Path(os.path.dirname(os.path.abspath(__file__))).resolve().parent
 PROJECT_PATH = Path(SOURCE_PATH).resolve().parent

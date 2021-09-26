@@ -3,6 +3,7 @@
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+
 import copy
 from collections import OrderedDict, defaultdict
 from typing import Union
@@ -158,6 +159,22 @@ class GroupedPredictor(RegressorMixin, BaseEstimator):
                 if name != "_global_":
                     n_parameters += est.n_parameters
             return n_parameters
+
+    @property
+    def dof(self):
+        try:
+            check_is_fitted(self, "fitted_")
+        except NotFittedError as exc:
+            raise ValueError(
+                "The degrees of freedom are acceccible only after "
+                "the model has been fitted"
+            ) from exc
+        else:
+            dof = 0
+            for name, est in self.estimators_.items():
+                if name != "_global_":
+                    dof += est.dof
+            return dof
 
     def fit(self, X: pd.DataFrame, y: Union[pd.DataFrame, pd.Series]):
         try:

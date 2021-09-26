@@ -1,0 +1,41 @@
+site_name : ???  
+versioned : ??? 
+
+location:
+  country   : null  
+  province  : null 
+  state     : null 
+
+rebind_names:
+  consumption : null
+  temperature : null 
+  holiday     : null 
+  timestamp   : null
+
+train.root_input:
+  type: ${globals:types.multiple}
+  path: ${site_name}/${globals:folders.raw}/train
+  dataset:
+    type: ${globals:types.csv}
+    load_args:
+      sep: ','
+  filename_suffix: '.csv'
+
+test.root_input:
+  type: ${globals:types.multiple}
+  path: ${site_name}/${globals:folders.raw}/test
+  dataset:
+    type: ${globals:types.csv}
+    load_args:
+      sep: ','
+  filename_suffix: '.csv'
+
+post.root_input:
+  type: ${globals:types.multiple}
+  path: ${site_name}/${globals:folders.raw}/post
+  dataset:
+    type: ${globals:types.csv}
+    load_args:
+      sep: ','
+  filename_suffix: '.csv'
+  

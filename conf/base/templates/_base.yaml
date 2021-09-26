@@ -1,0 +1,123 @@
+
+train.preprocessed_data:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.primary}/train/preprocessed.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+train.model_input_data:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_input}/train/model_input.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+test.preprocessed_data:
+  type: ${globals:types.csv}
+  filepath: ${site_name}/${globals:folders.primary}/test/preprocessed.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates :
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+test.model_input_data:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_input}/test/model_input.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+data_adequacy_summary:
+  type: ${globals:types.csv}
+  filepath: >-
+    ${site_name}/${globals:folders.report}/train/adequacy_summary.csv
+  load_args:
+    sep: ','
+    index_col : 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+matrix_profile_scores:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.primary}/train/matrix_profile_scores.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+prototype_days:
+  type: ${globals:types.pickle}
+  filepath: ${site_name}/${globals:folders.primary}/train/prototype_days.pickle
+  versioned : ${versioned}
+
+distance_metrics:
+  type: ${globals:types.pickle}
+  filepath: ${site_name}/${globals:folders.model_input}/train/distance_metrics.pickle
+  versioned : ${versioned}
+
+ensemble_model:
+  type: ${globals:types.pickle}
+  filepath: ${site_name}/${globals:folders.model}/train/ensemble_model.pickle
+  versioned : ${versioned}
+
+cv_model:
+  type: ${globals:types.pickle}
+  filepath: ${site_name}/${globals:folders.model}/train/cv_model.pickle
+  versioned : ${versioned}
+
+train.model_prediction:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_output}/train/model_prediction.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+test.model_prediction:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_output}/test/model_prediction.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+

@@ -12,7 +12,7 @@ daytype = Pipeline(
     [
         node(
             func=prepare_data,
-            inputs=["preprocessed_data", "parameters"],
+            inputs=["preprocessed_data", "params:prepare_daytyping"],
             outputs="data_for_daytyping",
             name="prepare_data",
         ),
@@ -24,8 +24,13 @@ daytype = Pipeline(
         ),
         node(
             func=apply_day_typing,
-            inputs=["data_for_daytyping", "parameters"],
-            outputs="distance_metrics",
+            inputs=[
+                "data_for_daytyping",
+                "params:daytyping_window",
+                "params:for_find_prototypes",
+                "params:for_distance_metric",
+            ],
+            outputs=["prototype_days", "distance_metrics"],
             name="apply_day_typing",
         ),
     ]
@@ -34,7 +39,11 @@ daytype = Pipeline(
 
 daytype_train = pipeline(
     daytype,
-    outputs=["matrix_profile_scores", "distance_metrics"],  # don't namespace
+    outputs=[
+        "matrix_profile_scores",
+        "prototype_days",
+        "distance_metrics",
+    ],  # don't namespace
     namespace="train",
 )
 

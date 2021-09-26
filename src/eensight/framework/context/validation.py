@@ -62,7 +62,7 @@ def validate_extrapolation(x):
 # Validation schemas
 ##########################################################################
 
-TrendSchema = Schema.from_dict(  # passed to eensight.features.generate.TrendFeatures
+TrendSchema = Schema.from_dict(
     {
         "type": fields.String(required=True, validate=validate_type),
         "feature": fields.String(required=False, allow_none=True, load_default=None),
@@ -77,51 +77,43 @@ TrendSchema = Schema.from_dict(  # passed to eensight.features.generate.TrendFea
 )
 
 
-DatetimeSchema = (
-    Schema.from_dict(  # passed to eensight.features.generate.DatetimeFeatures
-        {
-            "type": fields.String(required=True, validate=validate_type),
-            "feature": fields.String(
-                required=False, allow_none=True, load_default=None
-            ),
-            "remainder": fields.String(
-                required=False,
-                load_default="passthrough",
-                validate=validate_remainder,
-            ),
-            "replace": fields.Boolean(required=False, load_default=False),
-            "subset": fields.String(  # string of comma-separated values
-                required=False, load_default=None
-            ),
-        }
-    )
+DatetimeSchema = Schema.from_dict(
+    {
+        "type": fields.String(required=True, validate=validate_type),
+        "feature": fields.String(required=False, allow_none=True, load_default=None),
+        "remainder": fields.String(
+            required=False,
+            load_default="passthrough",
+            validate=validate_remainder,
+        ),
+        "replace": fields.Boolean(required=False, load_default=False),
+        "subset": fields.String(  # string of comma-separated values
+            required=False, load_default=None
+        ),
+    }
 )
 
 
-CyclicalSchema = (
-    Schema.from_dict(  # passed to eensight.features.generate.CyclicalFeatures
-        {
-            "type": fields.String(required=True, validate=validate_type),
-            "seasonality": fields.String(required=True),
-            "feature": fields.String(
-                required=False, allow_none=True, load_default=None
-            ),
-            "period": fields.Float(required=False, allow_none=True, load_default=None),
-            "fourier_order": fields.Integer(
-                required=False, allow_none=True, load_default=None
-            ),
-            "remainder": fields.String(
-                required=False,
-                load_default="passthrough",
-                validate=validate_remainder,
-            ),
-            "replace": fields.Boolean(required=False, load_default=False),
-        }
-    )
+CyclicalSchema = Schema.from_dict(
+    {
+        "type": fields.String(required=True, validate=validate_type),
+        "seasonality": fields.String(required=True),
+        "feature": fields.String(required=False, allow_none=True, load_default=None),
+        "period": fields.Float(required=False, allow_none=True, load_default=None),
+        "fourier_order": fields.Integer(
+            required=False, allow_none=True, load_default=None
+        ),
+        "remainder": fields.String(
+            required=False,
+            load_default="passthrough",
+            validate=validate_remainder,
+        ),
+        "replace": fields.Boolean(required=False, load_default=False),
+    }
 )
 
 
-LinearSchema = Schema.from_dict(  # passed to eensight.features.encode.IdentityEncoder
+LinearSchema = Schema.from_dict(
     {
         "type": fields.String(required=True, validate=validate_type),
         "feature": fields.String(required=True),
@@ -131,39 +123,37 @@ LinearSchema = Schema.from_dict(  # passed to eensight.features.encode.IdentityE
     }
 )
 
-CategoricalSchema = (
-    Schema.from_dict(  # passed to eensight.features.encode.CategoricalEncoder
-        {
-            "type": fields.String(required=True, validate=validate_type),
-            "feature": fields.String(required=True),
-            "max_n_categories": fields.Integer(
-                required=False, allow_none=True, load_default=None
-            ),
-            "stratify_by": fields.String(  # string of comma-separated values
-                required=False, allow_none=True, load_default=None
-            ),
-            "excluded_categories": fields.String(  # string of comma-separated values
-                required=False, allow_none=True, load_default=None
-            ),
-            "unknown_value": fields.Integer(required=False, load_default=None),
-            "min_samples_leaf": fields.Integer(required=False, load_default=1),
-            "max_features": fields.String(
-                required=False,
-                load_default="auto",
-                validate=validate_max_features,
-            ),
-            "random_state": fields.Integer(required=False, load_default=None),
-            "encode_as": fields.String(
-                required=False,
-                load_default="onehot",
-                validate=validate_encode_as,
-            ),
-            "interaction_only": fields.Boolean(required=False, load_default=False),
-        }
-    )
+CategoricalSchema = Schema.from_dict(
+    {
+        "type": fields.String(required=True, validate=validate_type),
+        "feature": fields.String(required=True),
+        "max_n_categories": fields.Integer(
+            required=False, allow_none=True, load_default=None
+        ),
+        "stratify_by": fields.String(  # string of comma-separated values
+            required=False, allow_none=True, load_default=None
+        ),
+        "excluded_categories": fields.String(  # string of comma-separated values
+            required=False, allow_none=True, load_default=None
+        ),
+        "unknown_value": fields.Integer(required=False, load_default=None),
+        "min_samples_leaf": fields.Integer(required=False, load_default=1),
+        "max_features": fields.String(
+            required=False,
+            load_default="auto",
+            validate=validate_max_features,
+        ),
+        "random_state": fields.Integer(required=False, load_default=None),
+        "encode_as": fields.String(
+            required=False,
+            load_default="onehot",
+            validate=validate_encode_as,
+        ),
+        "interaction_only": fields.Boolean(required=False, load_default=False),
+    }
 )
 
-SplineSchema = Schema.from_dict(  # passed to eensight.features.encode.SplineEncoder
+SplineSchema = Schema.from_dict(
     {
         "type": fields.String(required=True, validate=validate_type),
         "feature": fields.String(required=True),
@@ -225,7 +215,7 @@ def parse_model_config(config):
     if "regressors" in config:
         for name, props in config["regressors"].items():
             props = _validated_props(props)
-            if props.get("interaction_only"):
+            if props.get("interaction_only", False):
                 temporary[name] = props
             else:
                 model_structure["main_effects"][name] = _validated_props(props)

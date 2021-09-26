@@ -6,7 +6,7 @@
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import apply_ensemble, create_ensemble, optimize_model
+from .nodes import apply_ensemble, create_ensemble, evaluate_ensemble, optimize_model
 
 baseline_train = Pipeline(
     [
@@ -16,22 +16,27 @@ baseline_train = Pipeline(
                 "model_input_data",
                 "model_structure",
                 "distance_metrics",
-                "parameters",
+                "params:for_optimize_model",
             ],
             outputs=["composite_model", "opt_scores", "opt_params"],
             name="optimize_model",
         ),
         node(
             func=create_ensemble,
+            inputs=["model_input_data", "composite_model", "opt_scores", "opt_params"],
+            outputs="ensemble_model",
+            name="create_ensemble",
+        ),
+        node(
+            func=evaluate_ensemble,
             inputs=[
                 "model_input_data",
-                "composite_model",
-                "opt_scores",
-                "opt_params",
-                "parameters",
+                "ensemble_model",
+                "params:include_components",
+                "params:for_cross_validate",
             ],
-            outputs=["ensemble_model", "ensemble_model_prediction"],
-            name="create_ensemble",
+            outputs=["model_prediction", "cv_model"],
+            name="evaluate_ensemble",
         ),
     ]
 )
@@ -44,9 +49,9 @@ baseline_test = Pipeline(
             inputs=[
                 "model_input_data",
                 "ensemble_model",
-                "parameters",
+                "params:include_components",
             ],
-            outputs="ensemble_model_prediction",
+            outputs="model_prediction",
             name="apply_ensemble",
         ),
     ]

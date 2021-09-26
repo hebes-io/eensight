@@ -1,0 +1,34 @@
+site_name : demo
+versioned : false   
+
+location:
+  country   : null  
+  province  : null 
+  state     : null 
+
+rebind_names:
+  consumption : null
+  temperature : null 
+  holiday     : null 
+  timestamp   : null
+
+train.root_input:
+  type: PartitionedDataSet
+  path: demo/01_raw/train
+  dataset:
+    type: pandas.CSVDataSet
+    load_args:
+      sep: ','
+      index_col: 0
+  filename_suffix: '.csv'
+
+test.root_input:
+  type: PartitionedDataSet
+  path: demo/01_raw/test
+  dataset:
+    type: pandas.CSVDataSet
+    load_args:
+      sep: ','
+      index_col: 0
+  filename_suffix: '.csv'
+  

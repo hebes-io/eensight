@@ -20,8 +20,7 @@ class ProjectHooks:
     ) -> OmegaConfigLoader:
         return OmegaConfigLoader(
             conf_paths,
-            globals_pattern=["globals*", "globals*/**", "**/globals*"],
-            merge_keys=["rebind_names", "sources"],
+            globals_pattern="globals*",
         )
 
     @hook_impl

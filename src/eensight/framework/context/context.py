@@ -4,12 +4,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# Adapted from https://github.com/quantumblacklabs/kedro/blob/0.17.5/kedro/framework/context/context.py
+
+import os
 from pathlib import Path
 from typing import Any, Dict, Union
 from warnings import warn
 
-import inject
-from kedro.config import MissingConfigException
+from kedro.config import ConfigLoader, MissingConfigException
 from kedro.framework.context import KedroContext, KedroContextError
 from kedro.framework.context.context import (
     _convert_paths_to_absolute_posix,
@@ -18,14 +20,17 @@ from kedro.framework.context.context import (
 from kedro.framework.hooks import get_hook_manager
 from kedro.io import DataCatalog
 from kedro.versioning import Journal
-from mergedeep import merge
+from omegaconf import OmegaConf
+
+import eensight.settings
 
 from .validation import parse_model_config
 
 
 class CustomContext(KedroContext):
-    """``CustomContext`` is the base class which holds the configuration and
-    Kedro's main functionality.
+    """``KedroContext`` is the base class which holds the configuration and
+    Kedro's main functionality. ``CustomContext`` extends ``KedroContext``
+    to allow additional configuration to pass from the ``KedroSession``.
     """
 
     def __init__(
@@ -38,7 +43,8 @@ class CustomContext(KedroContext):
         """Create a context object
 
         Args:
-            package_name: Package name for the Kedro project the context is created for.
+            package_name: Package name for the Kedro project the context is
+                created for.
             project_path: Project path to define the context for.
             env: Optional argument for configuration default environment to be used
                 for running the pipelines. If not specified, it defaults to "local".
@@ -53,30 +59,63 @@ class CustomContext(KedroContext):
         """
         super().__init__(package_name, project_path, env=env, extra_params=extra_params)
 
+    def _get_config_loader(self) -> ConfigLoader:
+        """A hook for changing the creation of a ConfigLoader instance.
+
+        Returns:
+            Instance of `ConfigLoader` created by `register_config_loader` hook.
+
+        Raises:
+            KedroContextError: Incorrect ``ConfigLoader`` registered for the project.
+        """
+        conf_root = eensight.settings.CONF_ROOT
+
+        base_path = os.path.join(conf_root, "base")
+        if not os.path.isabs(base_path):
+            base_path = os.path.join(self.project_path, base_path)
+
+        local_path = os.path.join(conf_root, self.env)
+        if not os.path.isabs(local_path):
+            local_path = os.path.join(self.project_path, local_path)
+
+        conf_paths = [base_path, local_path]
+
+        hook_manager = get_hook_manager()
+        config_loader = (
+            hook_manager.hook.register_config_loader(  # pylint: disable=no-member
+                conf_paths=conf_paths,
+                env=self.env,
+                extra_params=self._extra_params,
+            )
+        )
+        if not isinstance(config_loader, ConfigLoader):
+            raise KedroContextError(
+                f"Expected an instance of `ConfigLoader`, "
+                f"got `{type(config_loader).__name__}` instead."
+            )
+        return config_loader
+
     @property
     def params(self) -> Dict[str, Any]:
         """Read-only property referring to Kedro's parameters for this context.
 
         Returns:
-            Parameters defined in configuration file with the addition of any
+            Parameters defined in configuration file(s) with the addition of any
                 extra parameters passed at initialization.
         """
         try:
-            selected_params = inject.instance("selected_params")
-            if selected_params is None:
-                conf_params = {}
-            else:
-                conf_params = self.config_loader.get(
-                    f"parameters/{selected_params}.*",
-                    f"parameters/{selected_params}*/**",
-                    f"**/parameters/{selected_params}.*",
-                )
+            # '**/parameters*' reads modular pipeline configs
+            params = self.config_loader.get(
+                "parameters*", "parameters*/**", "**/parameters*"
+            )
         except MissingConfigException as exc:
             warn(f"Parameters not found in your Kedro project config.\n{str(exc)}")
-            conf_params = {}
+            params = {}
 
-        conf_params = merge({}, conf_params, self._extra_params or {})
-        return conf_params
+        params = OmegaConf.create(params)
+        extra_params = OmegaConf.create(self._extra_params or {})
+        params = OmegaConf.merge(params, extra_params)
+        return OmegaConf.to_container(params)
 
     def _get_catalog(
         self,
@@ -92,30 +131,47 @@ class CustomContext(KedroContext):
         Raises:
             KedroContextError: Incorrect ``DataCatalog`` registered for the project.
         """
-        selected_catalog = inject.instance("selected_catalog")
-        selected_model = inject.instance("selected_model")
-
-        if selected_catalog is None:
-            raise KedroContextError("No catalog configuration has been selected.")
-
-        conf_catalog = self.config_loader.get(
-            f"catalog*/{selected_catalog}.*",
-            f"catalog*/{selected_catalog}*/**",
-            f"**/catalog*/{selected_catalog}.*",
+        # '**/catalog*' reads modular pipeline configs
+        feed_dict = self._get_feed_dict()
+        selected_catalog = feed_dict["parameters"].pop(
+            "catalog", eensight.settings.DEFAULT_CATALOG
+        )
+        catalog_is_partial = feed_dict["parameters"].pop(
+            "catalog_is_partial",
+            False or (selected_catalog == eensight.settings.DEFAULT_CATALOG),
         )
 
-        rebind_names = {}
-        if "rebind_names" in conf_catalog:
-            rebind_names = conf_catalog.pop("rebind_names")
+        if catalog_is_partial:
+            # '**/catalog*' reads modular pipeline configs
+            conf_catalog = self.config_loader.get(
+                f"catalogs/{selected_catalog}*",
+                f"catalogs/{selected_catalog}/**",
+                f"catalogs/**/{selected_catalog}*",
+                "templates/_base.*",
+            )
+        else:
+            conf_catalog = self.config_loader.get(
+                f"catalogs/{selected_catalog}*",
+                f"catalogs/{selected_catalog}*/**",
+                f"catalogs/**/{selected_catalog}*",
+            )
 
-        location = {}
-        if "location" in conf_catalog:
-            location = conf_catalog.pop("location")
+        # remove site_name and versioned
+        conf_catalog.pop("site_name")
+        conf_catalog.pop("versioned")
+
+        # capture rebind_names and location
+        rebind_names = conf_catalog.pop("rebind_names", {})
+        location = conf_catalog.pop("location", {})
 
         # turn relative paths in conf_catalog into absolute paths
         # before initializing the catalog
+        data_root = eensight.settings.DATA_ROOT
+        if not os.path.isabs(data_root):
+            data_root = os.path.join(self.project_path, data_root)
+
         conf_catalog = _convert_paths_to_absolute_posix(
-            project_path=self.project_path, conf_dictionary=conf_catalog["sources"]
+            project_path=Path(data_root), conf_dictionary=conf_catalog
         )
         conf_creds = self._get_config_credentials()
 
@@ -133,19 +189,21 @@ class CustomContext(KedroContext):
                 f"got `{type(catalog).__name__}` instead."
             )
 
-        feed_dict = self._get_feed_dict()
+        selected_model = feed_dict["parameters"].pop(
+            "model", eensight.settings.DEFAULT_MODEL
+        )
+
         catalog.add_feed_dict(feed_dict)
         catalog.add_feed_dict(dict(rebind_names=rebind_names))
         catalog.add_feed_dict(dict(location=location))
 
-        if selected_model is not None:
-            conf_model = self.config_loader.get(
-                f"models/{selected_model}.*",
-                f"models/{selected_model}*/**",
-                f"**/models/{selected_model}.*",
-            )
-            model_structure = parse_model_config(conf_model)
-            catalog.add_feed_dict(dict(model_structure=model_structure))
+        conf_model = self.config_loader.get(
+            f"models/{selected_model}.*",
+            f"models/{selected_model}/**",
+            f"**/models/{selected_model}.*",
+        )
+        model_structure = parse_model_config(conf_model)
+        catalog.add_feed_dict(dict(model_structure=model_structure))
 
         if catalog.layers:
             _validate_layers_for_transcoding(catalog)

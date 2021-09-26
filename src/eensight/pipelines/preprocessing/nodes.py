@@ -31,21 +31,23 @@ logger = logging.getLogger("preprocess-stage")
 
 def validate_input_data(input_data, rebind_names, location):
     if isinstance(input_data, dict):
-        input_data = validate_partitions(input_data, rebind_names)
+        validated_data = validate_partitions(input_data, rebind_names)
     else:
         input_data = apply_rebind_names(input_data, rebind_names)
-        input_data = validate_dataset(input_data)
+        validated_data = validate_dataset(input_data)
 
-    if ("holiday" not in input_data) and location and any(location.values()):
+    if ("holiday" not in validated_data) and location and any(location.values()):
         country = location.get("country")
         province = location.get("province")
         state = location.get("state")
-        input_data = add_holidays(input_data, country, province=province, state=state)
+        validated_data = add_holidays(
+            validated_data, country, province=province, state=state
+        )
 
-    for col in get_categorical_cols(input_data, int_is_categorical=False):
-        input_data[col] = input_data[col].fillna(value="_novalue_")
+    for col in get_categorical_cols(validated_data, int_is_categorical=False):
+        validated_data[col] = validated_data[col].fillna(value="_novalue_")
 
-    return input_data
+    return validated_data
 
 
 ############################################################################################
@@ -53,9 +55,17 @@ def validate_input_data(input_data, rebind_names, location):
 ############################################################################################
 
 
-def find_outliers(data, parameters):
-    for col in parameters["find_outliers_for"]:
-        params = parameters["global_filter"][col]
+def find_outliers(
+    data,
+    find_outliers_for,
+    for_global_filter,
+    for_seasonal_decompose,
+    for_global_outlier,
+    for_local_outlier,
+    max_outlier_pct,
+):
+    for col in find_outliers_for:
+        params = for_global_filter[col]
         data[col] = global_filter(
             data[col],
             no_change_window=params.get("no_change_window"),
@@ -67,7 +77,7 @@ def find_outliers(data, parameters):
 
         resid = None
         if col == "consumption":
-            params = parameters["seasonal_decompose"][col]
+            params = for_seasonal_decompose[col]
             results = decompose_consumption(
                 data[[col]].dropna(),
                 dt=params["dt"],
@@ -79,7 +89,7 @@ def find_outliers(data, parameters):
             resid = results.transformed["resid"]
 
         if col == "temperature":
-            params = parameters["seasonal_decompose"][col]
+            params = for_seasonal_decompose[col]
             results = decompose_temperature(
                 data[[col]].dropna(),
                 dt=params["dt"],
@@ -91,16 +101,16 @@ def find_outliers(data, parameters):
         if resid is None:
             resid = data[col].dropna()
 
-        params = parameters["global_outlier_detect"]
-        outliers_global = global_outlier_detect(resid, params["c"])
-        params = parameters["local_outlier_detect"]
-        outliers_local = local_outlier_detect(resid, params["min_samples"], params["c"])
+        outliers_global = global_outlier_detect(resid, for_global_outlier["c"])
+        outliers_local = local_outlier_detect(
+            resid, for_local_outlier["min_samples"], for_local_outlier["c"]
+        )
 
         no_outliers = np.logical_or(outliers_global == 0, outliers_local == 0)
         outlier_score = outliers_global + outliers_local
         outlier_score = outlier_score.mask(no_outliers, 0)
 
-        n_outliers = int(parameters["max_outlier_pct"] * len(data))
+        n_outliers = int(max_outlier_pct * len(data))
         outliers = outlier_score[outlier_score > 0].nlargest(n_outliers)
 
         data[f"{col}_outlier"] = False
@@ -128,8 +138,8 @@ def outlier_to_nan(data):
     return data
 
 
-def linear_inpute_missing(data, parameters):
-    for col, params in parameters["linear_impute"].items():
+def linear_inpute_missing(data, for_linear_impute):
+    for col, params in for_linear_impute.items():
         data[col] = linear_impute(data[col], window=params["window"])
     return data
 

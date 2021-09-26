@@ -1,0 +1,18 @@
+
+model: towt
+pipeline: null 
+runner: null 
+from_inputs: null 
+to_outputs: null 
+from_nodes: null 
+to_nodes: null 
+nodes: null 
+tags: 
+  - train
+  - test
+  - post
+load_versions: null
+extra_params: null 
+
+
+

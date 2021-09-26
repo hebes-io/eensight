@@ -25,19 +25,27 @@ preprocess = Pipeline(
         ),
         node(
             func=find_outliers,
-            inputs=["validated_data", "parameters"],
+            inputs=[
+                "validated_data",
+                "params:find_outliers_for",
+                "params:for_global_filter",
+                "params:for_seasonal_decompose",
+                "params:for_global_outlier",
+                "params:for_local_outlier",
+                "params:max_outlier_pct",
+            ],
             outputs="data_with_outliers",
             name="find_outliers",
         ),
         node(
             func=outlier_to_nan,
             inputs="data_with_outliers",
-            outputs="data_without_outliers",
+            outputs="data_cleaned",
             name="outlier_to_nan",
         ),
         node(
             func=linear_inpute_missing,
-            inputs=["data_without_outliers", "parameters"],
+            inputs=["data_cleaned", "params:for_linear_impute"],
             outputs="preprocessed_data",
             name="linear_inpute_missing",
         ),
@@ -66,9 +74,12 @@ preprocess_train = pipeline(
 preprocess_test = pipeline(
     pipeline(
         preprocess.only_nodes(
-            "validate_input_data", "find_outliers", "drop_missing_data"
+            "validate_input_data",
+            "find_outliers",
+            "linear_inpute_missing",
+            "drop_missing_data",
         ),
-        outputs={"data_with_outliers": "preprocessed_data"},
+        outputs={"data_with_outliers": "data_cleaned"},
     ),
     inputs=["rebind_names", "location"],  # don't namespace
     namespace="test",

@@ -17,10 +17,11 @@ from eensight.features.cluster import ClusterFeatures
 from eensight.features.generate import DatetimeFeatures, MMCFeatures
 from eensight.models import CompositePredictor, EnsemblePredictor, GroupedPredictor
 
+from .cross_validation import CrossValidator
 from .metrics import cvrmse, nmbe
 from .optimization import optimize
 
-logger = logging.getLogger("model-selection-stage")
+logger = logging.getLogger("model-selection")
 
 
 def split_training_data(data, drop_outliers=True):
@@ -40,6 +41,7 @@ def optimize_for_tag(
     y_train,
     *,
     budget,
+    timeout,
     test_size,
     n_repeats,
     out_of_sample,
@@ -54,6 +56,7 @@ def optimize_for_tag(
         X_train,
         y_train,
         budget=budget,
+        timeout=timeout,
         test_size=test_size,
         n_repeats=n_repeats,
         out_of_sample=out_of_sample,
@@ -62,9 +65,7 @@ def optimize_for_tag(
     )
 
 
-def optimize_model(data, model_structure, distance_metrics, parameters):
-    params = parameters["optimize_model"]
-
+def optimize_model(data, model_structure, distance_metrics, for_optimize_model):
     mcc_features = Pipeline(
         [
             ("dates", DatetimeFeatures(subset=["month", "dayofweek"])),
@@ -72,17 +73,17 @@ def optimize_model(data, model_structure, distance_metrics, parameters):
         ]
     )
     clusterer = ClusterFeatures(
-        min_samples=params["clusterer"].get("min_samples", 5),
+        min_samples=for_optimize_model["clusterer"].get("min_samples", 5),
         transformer=mcc_features,
-        n_neighbors=params["clusterer"].get("n_neighbors", 1),
-        weights=params["clusterer"].get("weights", "uniform"),
-        output_name=params.get("group_feature", "cluster"),
+        n_neighbors=for_optimize_model["clusterer"].get("n_neighbors", 1),
+        weights=for_optimize_model["clusterer"].get("weights", "uniform"),
+        output_name=for_optimize_model.get("group_feature", "cluster"),
     )
     reg_grouped = GroupedPredictor(
         model_structure=model_structure,
-        group_feature=params.get("group_feature", "cluster"),
+        group_feature=for_optimize_model.get("group_feature", "cluster"),
         estimator_params=(
-            ("alpha", params["grouped"].get("alpha", 0.01)),
+            ("alpha", for_optimize_model["grouped"].get("alpha", 0.01)),
             ("fit_intercept", False),
         ),
     )
@@ -90,7 +91,7 @@ def optimize_model(data, model_structure, distance_metrics, parameters):
         distance_metrics=distance_metrics,
         base_clusterer=clusterer,
         base_regressor=reg_grouped,
-        group_feature=params.get("group_feature", "cluster"),
+        group_feature=for_optimize_model.get("group_feature", "cluster"),
     )
 
     X_train, y_train, _ = split_training_data(data)
@@ -100,10 +101,11 @@ def optimize_model(data, model_structure, distance_metrics, parameters):
             clone(model),
             X_train,
             y_train,
-            budget=params.get("budget", 15),
-            test_size=params.get("test_size", 0.25),
-            n_repeats=params.get("n_repeats", 1),
-            out_of_sample=params.get("out_of_sample", True),
+            budget=for_optimize_model.get("budget", 15),
+            timeout=for_optimize_model.get("timeout"),
+            test_size=for_optimize_model.get("test_size", 0.25),
+            n_repeats=for_optimize_model.get("n_repeats", 1),
+            out_of_sample=for_optimize_model.get("out_of_sample", True),
             multivariate=False,
             tag=tag,
         )
@@ -127,21 +129,21 @@ def optimize_model(data, model_structure, distance_metrics, parameters):
     return model, scores, params
 
 
-def create_ensemble(data, model, opt_scores, opt_params, parameters):
+def create_ensemble(data, model, opt_scores, opt_params):
     to_include = opt_scores.sort_values(by="CVRMSE").iloc[:5]
 
     model_ens = EnsemblePredictor(
         base_estimator=model,
         ensemble_parameters=opt_params.loc[to_include.index].to_dict("records"),
     )
-
     X_train, y_train, _ = split_training_data(data)
     model_ens = model_ens.fit(X_train, y_train)
+    return model_ens
 
-    params = parameters["create_ensemble"]
-    pred = model_ens.predict(
-        X_train, include_components=params.get("include_components", True)
-    )
+
+def evaluate_ensemble(data, model, include_components, for_cross_validate):
+    X_train, y_train, _ = split_training_data(data)
+    pred = model.predict(X_train, include_components=include_components)
     logger.info(
         "In-sample CV(RMSE) (%): "
         f"{cvrmse(y_train['consumption'], pred['consumption'])*100}"
@@ -150,12 +152,33 @@ def create_ensemble(data, model, opt_scores, opt_params, parameters):
         "In-sample NMBE (%): "
         f"{nmbe(y_train['consumption'], pred['consumption'])*100}"
     )
-    logger.info(f"Number of parameters: {model_ens.n_parameters}")
-    return model_ens, pred
+    logger.info(f"Number of parameters: {model.n_parameters}")
+    logger.info(f"Degrees of freedom: {model.dof}")
+
+    cv = CrossValidator(
+        model,
+        group_by=for_cross_validate.get("group_by", "week"),
+        stratify_by=for_cross_validate.get("stratify_by", "month"),
+        n_splits=for_cross_validate.get("n_splits", 3),
+        n_repeats=for_cross_validate.get("n_repeats", 5),
+        n_jobs=for_cross_validate.get("n_jobs", -1),
+        keep_estimators=True,
+        verbose=True,
+    )
+
+    if for_cross_validate.get("do_cross_validate", False):
+        cv = cv.fit(X_train, y_train)
+        logger.info(
+            f'Mean cross-validation CVRMSE (%): {np.mean(cv.scores_["CVRMSE"])*100}'
+        )
+        logger.info(
+            f'Mean cross-validation NMBE: (%) {np.mean(cv.scores_["NMBE"])*100}'
+        )
+
+    return pred, cv
 
 
-def apply_ensemble(data, model_ens, parameters):
-    params = parameters["apply_ensemble"]
+def apply_ensemble(data, model, include_components):
     X_test, y_test, outliers = split_training_data(data, drop_outliers=False)
 
     other_outliers = X_test.filter(like="outlier", axis=1)
@@ -163,19 +186,21 @@ def apply_ensemble(data, model_ens, parameters):
         X_test = X_test.drop(other_outliers.columns, axis=1)
         outliers = np.logical_or(outliers, other_outliers.apply(any, axis=1))
 
-    pred = model_ens.predict(
-        X_test, include_components=params.get("include_components", True)
-    )
+    pred = model.predict(X_test, include_components=include_components)
 
     y_true = y_test["consumption"]
     y_pred = pred["consumption"]
     logger.info(
         "Out-of-sample CV(RMSE) with outliers (%): " f"{cvrmse(y_true, y_pred)*100}"
     )
+    logger.info("Out-of-sample NMBE with outliers (%): " f"{nmbe(y_true, y_pred)*100}")
 
     y_true = y_test.loc[~outliers, ["consumption"]]
     y_pred = pred.loc[~outliers, ["consumption"]]
     logger.info(
         "Out-of-sample CV(RMSE) without outliers (%): " f"{cvrmse(y_true, y_pred)*100}"
+    )
+    logger.info(
+        "Out-of-sample NMBE without outliers (%): " f"{nmbe(y_true, y_pred)*100}"
     )
     return pred

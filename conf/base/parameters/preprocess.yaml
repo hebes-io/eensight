@@ -4,7 +4,7 @@ find_outliers_for:
   - consumption
   - temperature
 
-global_filter:
+for_global_filter:
   consumption:
     no_change_window: 3
     min_value: null 
@@ -18,7 +18,7 @@ global_filter:
     allow_zero: true
     allow_negative: true
 
-seasonal_decompose:
+for_seasonal_decompose:
   consumption:
     dt: null 
     add_trend: false
@@ -30,15 +30,15 @@ seasonal_decompose:
     alpha: 1
     return_model: false
 
-global_outlier_detect:
+for_global_outlier:
   c: 5
 
-local_outlier_detect:
+for_local_outlier:
   min_samples: 0.6 
   c: 5
 
 max_outlier_pct: 0.005
 
-linear_impute:
+for_linear_impute:
   temperature:
     window: 6

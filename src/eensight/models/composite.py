@@ -58,6 +58,10 @@ class CompositePredictor(RegressorMixin, BaseEstimator):
     def n_parameters(self):
         return self.estimator_.n_parameters
 
+    @property
+    def dof(self):
+        return self.estimator_.dof
+
     def fit(self, X: pd.DataFrame, y: Union[pd.DataFrame, pd.Series]):
         try:
             check_is_fitted(self, "fitted_")
