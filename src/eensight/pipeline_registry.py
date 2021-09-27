@@ -7,6 +7,7 @@ from kedro.pipeline import Pipeline
 
 from eensight.pipelines import day_typing as dt
 from eensight.pipelines import model_selection as ms
+from eensight.pipelines import post_estimation as post
 from eensight.pipelines import preprocessing as pre
 
 
@@ -20,10 +21,15 @@ def register_pipelines() -> Dict[str, Pipeline]:
     preprocess_pipeline = pre.create_pipeline()
     daytype_pipeline = dt.create_pipeline()
     baseline_pipeline = ms.create_pipeline()
+    post_pipeline = post.create_pipeline()
 
     return {
         "preprocess": preprocess_pipeline,
         "daytype": daytype_pipeline,
         "baseline": baseline_pipeline,
-        "__default__": preprocess_pipeline + daytype_pipeline + baseline_pipeline,
+        "post": post_pipeline,
+        "__default__": preprocess_pipeline
+        + daytype_pipeline
+        + baseline_pipeline
+        + post_pipeline,
     }

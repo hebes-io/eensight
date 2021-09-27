@@ -9,7 +9,6 @@ import functools
 from collections import defaultdict
 from typing import Dict, Union
 
-import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.exceptions import NotFittedError
@@ -86,7 +85,12 @@ class CompositePredictor(RegressorMixin, BaseEstimator):
             end_time = (
                 props["end_time"]
                 if props["end_time"] is not None
-                else datetime.time(0, 0)
+                else (
+                    datetime.datetime.combine(
+                        datetime.datetime.now().date(), start_time
+                    )
+                    - datetime.timedelta(seconds=1)
+                ).time()
             )
             subset = X.between_time(start_time, end_time, include_end=False)
             metric = functools.partial(metric_function, props["metric_components"])
@@ -123,7 +127,12 @@ class CompositePredictor(RegressorMixin, BaseEstimator):
             end_time = (
                 props["end_time"]
                 if props["end_time"] is not None
-                else datetime.time(0, 0)
+                else (
+                    datetime.datetime.combine(
+                        datetime.datetime.now().date(), start_time
+                    )
+                    - datetime.timedelta(seconds=1)
+                ).time()
             )
             subset = X.between_time(start_time, end_time, include_end=False)
             clusterer = self.clusterers_[str(i)]

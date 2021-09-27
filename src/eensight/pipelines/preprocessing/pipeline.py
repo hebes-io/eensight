@@ -85,8 +85,24 @@ preprocess_test = pipeline(
     namespace="test",
 )
 
+preprocess_post = pipeline(
+    pipeline(
+        preprocess.only_nodes(
+            "validate_input_data",
+            "find_outliers",
+            "linear_inpute_missing",
+            "drop_missing_data",
+        ),
+        outputs={"data_with_outliers": "data_cleaned"},
+    ),
+    inputs=["rebind_names", "location"],  # don't namespace
+    namespace="post",
+)
+
 
 def create_pipeline(**kwargs):
-    return Pipeline([preprocess_train], tags="train") + Pipeline(
-        [preprocess_test], tags="test"
+    return (
+        Pipeline([preprocess_train], tags="train")
+        + Pipeline([preprocess_test], tags="test")
+        + Pipeline([preprocess_post], tags="post")
     )

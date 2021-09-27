@@ -19,7 +19,7 @@ def load_catalog(catalog, partial_catalog=False, model=None, env="local"):
     path = Path(PROJECT_PATH)
     bootstrap_project(path)
 
-    extra_params = {"catalog": catalog, "catalog_is_partial": partial_catalog}
+    extra_params = {"catalog": catalog, "partial_catalog": partial_catalog}
     if model is not None:
         extra_params["model"] = model
 

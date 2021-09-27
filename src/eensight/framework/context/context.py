@@ -136,8 +136,9 @@ class CustomContext(KedroContext):
         selected_catalog = feed_dict["parameters"].pop(
             "catalog", eensight.settings.DEFAULT_CATALOG
         )
+
         catalog_is_partial = feed_dict["parameters"].pop(
-            "catalog_is_partial",
+            "partial_catalog",
             False or (selected_catalog == eensight.settings.DEFAULT_CATALOG),
         )
 

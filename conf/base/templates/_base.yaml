@@ -12,6 +12,30 @@ train.preprocessed_data:
     index: true
   versioned : ${versioned}
 
+test.preprocessed_data:
+  type: ${globals:types.csv}
+  filepath: ${site_name}/${globals:folders.primary}/test/preprocessed.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates :
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+post.preprocessed_data:
+  type: ${globals:types.csv}
+  filepath: ${site_name}/${globals:folders.primary}/post/preprocessed.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates :
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
 train.model_input_data:
   type: ${globals:types.csv}
   filepath: >- 
@@ -25,22 +49,23 @@ train.model_input_data:
     index: true
   versioned : ${versioned}
 
-test.preprocessed_data:
+test.model_input_data:
   type: ${globals:types.csv}
-  filepath: ${site_name}/${globals:folders.primary}/test/preprocessed.csv
+  filepath: >- 
+    ${site_name}/${globals:folders.model_input}/test/model_input.csv
   load_args:
     sep: ','
     index_col : 0
-    parse_dates :
+    parse_dates : 
       - 0
   save_args:
     index: true
   versioned : ${versioned}
 
-test.model_input_data:
+post.model_input_data:
   type: ${globals:types.csv}
   filepath: >- 
-    ${site_name}/${globals:folders.model_input}/test/model_input.csv
+    ${site_name}/${globals:folders.model_input}/post/model_input.csv
   load_args:
     sep: ','
     index_col : 0
@@ -111,6 +136,32 @@ test.model_prediction:
   type: ${globals:types.csv}
   filepath: >- 
     ${site_name}/${globals:folders.model_output}/test/model_prediction.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+post.model_prediction:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_output}/post/model_prediction.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
+post.savings:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.model_output}/post/savings.csv
   load_args:
     sep: ','
     index_col : 0

@@ -61,7 +61,7 @@ baseline_test = Pipeline(
 baseline_train = pipeline(
     baseline_train,
     inputs=["model_structure", "distance_metrics"],  # don't namespace
-    outputs="ensemble_model",  # don't namespace
+    outputs=["ensemble_model", "cv_model"],  # don't namespace
     namespace="train",
 )
 

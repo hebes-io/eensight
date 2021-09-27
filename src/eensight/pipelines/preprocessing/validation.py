@@ -619,8 +619,10 @@ def validate_dataset(data, date_col="timestamp"):
 
     data = expand_to_all_dates(data, date_col)
     data = data.set_index(date_col)
-    if "Unnamed: 0" in data:
-        data = data.drop("Unnamed: 0", axis=1)
+    to_drop = data.filter(like="Unnamed:", axis=1).columns
+
+    if len(to_drop) > 0:
+        data = data.drop(to_drop, axis=1)
     return data
 
 
