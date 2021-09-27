@@ -42,14 +42,6 @@ baseline_train = Pipeline(
 )
 
 
-baseline_train = pipeline(
-    baseline_train,
-    inputs=["model_structure", "distance_metrics"],  # don't namespace
-    outputs=["ensemble_model", "cv_model"],  # don't namespace
-    namespace="train",
-)
-
-
 baseline_test = Pipeline(
     [
         node(
@@ -63,6 +55,14 @@ baseline_test = Pipeline(
             name="apply_ensemble",
         ),
     ]
+)
+
+
+baseline_train = pipeline(
+    baseline_train,
+    inputs=["model_structure", "distance_metrics"],  # don't namespace
+    outputs="ensemble_model",  # don't namespace
+    namespace="train",
 )
 
 baseline_test = pipeline(
