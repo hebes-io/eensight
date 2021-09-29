@@ -158,8 +158,8 @@ class CustomContext(KedroContext):
             )
 
         # remove site_name and versioned
-        conf_catalog.pop("site_name")
-        conf_catalog.pop("versioned")
+        conf_catalog.pop("site_name", None)
+        conf_catalog.pop("versioned", None)
 
         # capture rebind_names and location
         rebind_names = conf_catalog.pop("rebind_names", {})
