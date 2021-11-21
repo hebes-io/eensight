@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 from setuptools import find_packages, setup
 
 from eensight import __version__
 
 
 here = os.path.abspath(os.path.dirname(__file__))
+docs = str(Path(here).parent.resolve().joinpath('docs'))
 
 
 def dev_extras_require():
@@ -38,9 +40,8 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 
 
 # Get the long description from the README file
-with open(os.path.join(here, "README.md"), encoding="utf-8") as f:
+with open(os.path.join(docs, "overview.md"), encoding="utf-8") as f:
     readme = f.read()
-
 
 
 configuration = {
