@@ -1,34 +1,84 @@
+import os
 from setuptools import find_packages, setup
 
-entry_point = "eensight = eensight.__main__:main"
+from eensight import __version__
+
+
+here = os.path.abspath(os.path.dirname(__file__))
+
+
+def dev_extras_require():
+    extras = [
+        "flake8 >= 3.9.2",
+        "flake8-docstrings >= 1.6.0",
+        "black >= 21.7b0",
+        "pytest >= 6.2.5",
+    ]
+    return extras
+
+
+def docs_extras_require():
+    extras = [
+        'Sphinx >= 3.0.0',  # Force RTD to use >= 3.0.0
+        'docutils<0.18',
+        "nbsphinx==0.8.7",
+        'pylons-sphinx-themes >= 1.0.8',  # Ethical Ads
+        "myst-parser==0.15.2"
+    ]
+    return extras
 
 
 # get the dependencies and installs
 with open("requirements.txt", "r", encoding="utf-8") as f:
-    # Make sure we strip all comments and options (e.g "--extra-index-url")
-    # that arise from a modified pip.conf file that configure global options
-    # when running kedro build-reqs
     requires = []
     for line in f:
         req = line.split("#", 1)[0].strip()
         if req and not req.startswith("--"):
             requires.append(req)
 
-setup(
-    name="eensight",
-    version="0.2",
-    packages=find_packages(exclude=["tests"]),
-    entry_points={"console_scripts": [entry_point]},
-    install_requires=requires,
-    extras_require={
-        "docs": [
-            "sphinx~=3.4.3",
-            "nbsphinx==0.8.1",
-            "nbstripout==0.3.3",
-            "recommonmark==0.7.1",
-            "sphinx-autodoc-typehints==1.11.1",
-            "sphinx_copybutton==0.3.1",
-            "pydata-sphinx-theme==0.7.1",
-        ]
-    },
-)
+
+# Get the long description from the README file
+with open(os.path.join(here, "README.md"), encoding="utf-8") as f:
+    readme = f.read()
+
+
+
+configuration = {
+    "name": "eensight",
+    "version": __version__,
+    "python_requires=": ">=3.7",
+    "description": (
+        "A library for measurement and verification of energy efficiency projects."
+    ),
+    "long_description": readme,
+    "long_description_content_type": "text/markdown",
+    "classifiers": [
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: Apache Software License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Topic :: Software Development",
+        "Topic :: Scientific/Engineering",
+        "Operating System :: Microsoft :: Windows",
+        "Operating System :: POSIX",
+        "Operating System :: Unix",
+        "Operating System :: MacOS",
+    ],
+    "keywords": "measurement, verification, pipelines",
+    "url": "https://github.com/hebes-io/eensight",
+    "maintainer": "Sotiris Papadelis",
+    "maintainer_email": "spapadel@gmail.com",
+    "license": "Apache License, Version 2.0",
+    "packages": find_packages(),
+    "install_requires": requires,
+    "ext_modules": [],
+    "cmdclass": {},
+    "tests_require": ["pytest"],
+    "data_files": (),
+    "extras_require": {"dev": dev_extras_require(), "docs": docs_extras_require()},
+}
+
+setup(**configuration)
