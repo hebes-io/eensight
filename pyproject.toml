@@ -1,7 +1,7 @@
 [tool.kedro]
 package_name = "eensight"
 project_name = "eensight energy efficiency M&V tool"
-project_version = "0.17.4"
+project_version = "0.17.5"
 
 [tool.isort]
 multi_line_output = 3

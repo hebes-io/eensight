@@ -21,18 +21,9 @@ train.root_input:
       sep: ','
   filename_suffix: '.csv'
 
-test.root_input:
+apply.root_input:
   type: ${globals:types.multiple}
-  path: ${site_name}/${globals:folders.raw}/test
-  dataset:
-    type: ${globals:types.csv}
-    load_args:
-      sep: ','
-  filename_suffix: '.csv'
-
-post.root_input:
-  type: ${globals:types.multiple}
-  path: ${site_name}/${globals:folders.raw}/post
+  path: ${site_name}/${globals:folders.raw}/apply
   dataset:
     type: ${globals:types.csv}
     load_args:

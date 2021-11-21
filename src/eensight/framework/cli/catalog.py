@@ -24,8 +24,8 @@ from eensight.settings import CONF_ROOT, DEFAULT_CATALOG, PROJECT_PATH
 NAME_HELP = """The name of the catalog to load."""
 PARTIAL_ARG_HELP = """Flag to indicate whether the catalog includes information
 only about the raw input data."""
-PIPELINE_HELP = """One or more names (separeated by comma) for the pipeline(s) to 
-show artifacts for. If not set, artifacts for all pipelines will be shown."""
+PIPELINE_HELP = """One or more names (separated by comma) for the pipeline(s) to
+show catalog artifacts for. If not set, artifacts for all pipelines will be shown."""
 
 
 def _map_type_to_datasets(datasets, datasets_meta):
@@ -129,10 +129,9 @@ def catalog():
     """Commands for working with data catalogs."""
 
 
-@catalog.command(
-    "create", help="Create a new catalog and add it in `conf/base/catalogs`."
-)
+@catalog.command("create")
 def create_catalog():
+    "Create a new catalog and add it in `conf/base/catalogs`."
     site_name = click.prompt(
         _echo_text(
             "Enter a name for the building site (all whitespace will be "
@@ -157,11 +156,9 @@ def create_catalog():
             "in the same directory",
             fg="bright_white",
         )
-    has_test_data = click.confirm(
-        _echo_text("Is there a `test` version of the data too?")
-    )
+
     has_post_data = click.confirm(
-        _echo_text("Is there a `post`-intervention version of the data too?")
+        _echo_text("Is there a post-intervention version of the data too?")
     )
 
     conf_root = CONF_ROOT
@@ -202,41 +199,44 @@ def create_catalog():
     catalog = OmegaConf.merge(root_input_cfg, base_cfg)
     OmegaConf.resolve(catalog)
 
-    keys_to_drop = ["site_name", "versioned"]
-    if (not has_test_data) or (not has_post_data):
+    keys_to_drop = ["site_name", "versioned", "root_input_name"]
+    if not has_post_data:
         for key in catalog:
-            if key.startswith("test.") and (not has_test_data):
-                keys_to_drop.append(key)
-            elif key.startswith("post.") and (not has_post_data):
+            if key.startswith("apply.") and (not has_post_data):
                 keys_to_drop.append(key)
             else:
                 continue
 
     for key in keys_to_drop:
-        catalog.pop(key)
+        catalog.pop(key, None)
 
     path = pathlib.Path(os.path.join(base_path, "catalogs", site_name))
     path.mkdir(parents=True, exist_ok=True)
     filepath = os.path.join(path, "catalog.yaml")
 
-    with open(filepath, "w") as f:
-        f.write(OmegaConf.to_yaml(catalog))
-    click.secho(f"Saved `catalog.yaml` at {path}", fg="bright_white")
+    override = True
+    if os.path.isfile(filepath):
+        override = click.confirm(
+            _echo_text("Existing catalog found. Do you want to override it?")
+        )
+
+    if not override:
+        click.secho("No catalog created", fg="bright_red")
+    else:
+        with open(filepath, "w") as f:
+            f.write(OmegaConf.to_yaml(catalog))
+        click.secho(f"Saved `catalog.yaml` at {path}", fg="bright_white")
 
 
 # adapted from https://github.com/quantumblacklabs/kedro/blob/0.17.5/kedro/framework/cli/catalog.py
-@catalog.command("list", help="List all artifacts in the selected catalog.")
+@catalog.command("describe")
+@click.argument("name", default=DEFAULT_CATALOG)
 @click.option(
-    "--name",
-    type=str,
-    default=DEFAULT_CATALOG,
-    help=NAME_HELP,
-)
-@click.option(
-    "--partial-catalog", "-partial", is_flag=True, multiple=False, help=PARTIAL_ARG_HELP
+    "--partial-catalog", "-pc", is_flag=True, multiple=False, help=PARTIAL_ARG_HELP
 )
 @click.option(
     "--pipeline",
+    "-ppl",
     type=str,
     default="",
     help=PIPELINE_HELP,
@@ -244,6 +244,7 @@ def create_catalog():
 )
 @env_option
 def list_catalog(name, partial_catalog, pipeline, env):
+    "List all artifacts in the selected catalog."
     session = KedroSession.create(
         package_name="eensight",
         project_path=PROJECT_PATH,
@@ -259,7 +260,7 @@ def list_catalog(name, partial_catalog, pipeline, env):
 
     table = Table(show_header=True, header_style="bold #2070b2", box=rich.box.SIMPLE)
     table.add_column("Pipeline name", justify="right")
-    table.add_column("Artifacts in pipeline")
+    table.add_column("Catalog artifacts used by pipeline")
 
     for pipe in target_pipelines:
         pl_obj = pipelines.get(pipe)
@@ -280,7 +281,13 @@ def list_catalog(name, partial_catalog, pipeline, env):
         if default_ds:
             used_by_type["DefaultDataSet"].extend(default_ds)
 
-        data = {"Artifacts by type": dict(used_by_type)}
+        data = {
+            "Artifacts by type": {
+                key: sorted(val)
+                for key, val in used_by_type.items()
+                if isinstance(val, list)
+            }
+        }
         table.add_row(pipe, yaml.dump(data))
 
     click.secho(rich.print(table))

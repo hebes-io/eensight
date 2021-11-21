@@ -19,15 +19,11 @@ train.root_input:
   filepath: >- 
     ${site_name}/${globals:folders.raw}/train/${root_input_name}.csv
 
-test.root_input:
-  type: ${globals:types.csv}
-  filepath: >- 
-    ${site_name}/${globals:folders.raw}/test/${root_input_name}.csv
 
-post.root_input:
+apply.root_input:
   type: ${globals:types.csv}
   filepath: >- 
-    ${site_name}/${globals:folders.raw}/post/${root_input_name}.csv
+    ${site_name}/${globals:folders.raw}/apply/${root_input_name}.csv
 
 
 

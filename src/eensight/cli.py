@@ -5,8 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
-import traceback
-import webbrowser
 from itertools import chain
 from pathlib import Path
 from typing import Iterable, Tuple
@@ -21,15 +19,13 @@ from kedro.framework.cli.utils import (
 from kedro.framework.session import KedroSession
 from kedro.utils import load_obj
 from omegaconf import OmegaConf
-from watchgod import RegExpWatcher, run_process
 
 from eensight.config import OmegaConfigLoader
 from eensight.framework.cli.catalog import catalog
 from eensight.framework.cli.pipeline import pipeline
 from eensight.settings import (
     CONF_ROOT,
-    DEFAULT_CATALOG,
-    DEFAULT_MODEL,
+    DEFAULT_BASE_MODEL,
     DEFAULT_RUN_CONFIG,
     PROJECT_PATH,
 )
@@ -40,8 +36,8 @@ CATALOG_HELP = """The name of the catalog to use. Catalogs will be searched
 in `conf/base/catalogs`."""
 PARTIAL_ARG_HELP = """A flag to indicate whether the selected catalog includes
 information only about the raw input data."""
-MODEL_ARG_HELP = """The name of the base model configuration to use. If not set,
-the `seetings.DEFAULT_MODEL` will be used."""
+BASE_MODEL_ARG_HELP = """The name of the base model configuration to use. If not
+set, the `seetings.DEFAULT_BASE_MODEL` will be used."""
 PIPELINE_ARG_HELP = """Name of the modular pipeline to run. If not set, all
 pipelines will run."""
 RUNNER_ARG_HELP = """Specify a runner that you want to run the pipeline with.
@@ -100,8 +96,8 @@ def cli():
 @click.option(
     "--partial-catalog", "-pc", is_flag=True, multiple=False, help=PARTIAL_ARG_HELP
 )
-@click.option("--model", type=str, default=None, help=MODEL_ARG_HELP)
-@click.option("--pipeline", type=str, default=None, help=PIPELINE_ARG_HELP)
+@click.option("--base-model", "-bm", type=str, default=None, help=BASE_MODEL_ARG_HELP)
+@click.option("--pipeline", "-ppl", type=str, default=None, help=PIPELINE_ARG_HELP)
 @click.option(
     "--runner",
     "-r",
@@ -149,7 +145,7 @@ def cli():
 def run(
     catalog,
     partial_catalog,
-    model,
+    base_model,
     pipeline,
     runner,
     parallel,
@@ -173,11 +169,11 @@ def run(
             [os.path.join(PROJECT_PATH, CONF_ROOT, "base", "run_config")]
         )
         run_config = config_loader.get(
-            f"{run_config}*", f"{run_config}*/**", f"**/{run_config}*"
+            f"{run_config}.*", f"{run_config}*/**", f"**/{run_config}.*"
         )
 
         run_args = {
-            "model": model,
+            "base_model": base_model,
             "pipeline": pipeline,
             "runner": runner,
             "from_inputs": from_inputs,
@@ -196,7 +192,7 @@ def run(
         }
 
     """Run the pipeline."""
-    model = run_args["model"] or DEFAULT_MODEL
+    base_model = run_args["base_model"] or DEFAULT_BASE_MODEL
 
     if parallel and run_args["runner"]:
         raise KedroCliError(
@@ -220,7 +216,7 @@ def run(
 
     extra_params["catalog"] = catalog
     extra_params["partial_catalog"] = partial_catalog
-    extra_params["model"] = model
+    extra_params["base_model"] = base_model
 
     package_name = str(Path(__file__).resolve().parent.name)
     with KedroSession.create(
@@ -241,101 +237,6 @@ def run(
             to_outputs=run_args["to_outputs"],
             load_versions=run_args["load_versions"],
         )
-
-
-@cli.command("viz")
-@click.option(
-    "--catalog",
-    "-c",
-    default=DEFAULT_CATALOG,
-    help=CATALOG_HELP,
-)
-@click.option(
-    "--partial-catalog", "-pc", is_flag=True, multiple=False, help=PARTIAL_ARG_HELP
-)
-@click.option(
-    "--host",
-    default=None,
-    help="Host that viz will listen to. Defaults to localhost.",
-)
-@click.option(
-    "--port",
-    default=None,
-    type=int,
-    help="TCP port that viz will listen to. Defaults to 4141.",
-)
-@click.option(
-    "--load-file",
-    default=None,
-    type=click.Path(exists=True, dir_okay=False),
-    help="Path to load the pipeline JSON file",
-)
-@click.option(
-    "--save-file",
-    default=None,
-    type=click.Path(dir_okay=False, writable=True),
-    help="Path to save the pipeline JSON file",
-)
-@click.option(
-    "--pipeline",
-    type=str,
-    default=None,
-    help="Name of the registered pipeline to visualise. "
-    "If not set, the default pipeline is visualised",
-)
-@click.option(
-    "--env",
-    "-e",
-    type=str,
-    default=None,
-    multiple=False,
-    envvar="KEDRO_ENV",
-    help="Kedro configuration environment. If not specified, "
-    "catalog config in `local` will be used",
-)
-def viz(catalog, partial_catalog, host, port, load_file, save_file, pipeline, env):
-    """Visualise the eensight pipelines."""
-    from eensight.framework.cli.server import (
-        DEFAULT_HOST,
-        DEFAULT_PORT,
-        is_localhost,
-        run_server,
-    )
-
-    try:
-        run_server_kwargs = {
-            "catalog": catalog,
-            "partial_catalog": partial_catalog,
-            "host": host or DEFAULT_HOST,
-            "port": port or DEFAULT_PORT,
-            "load_file": load_file,
-            "save_file": save_file,
-            "pipeline_name": pipeline,
-            "env": env,
-            "browser": True,
-            "autoreload": False,
-            "project_path": PROJECT_PATH,
-        }
-
-        if is_localhost(host):
-            webbrowser.open_new(f"http://{host}:{port}/")
-
-        project_path = PROJECT_PATH
-        run_server_kwargs["project_path"] = project_path
-        # we don't want to launch a new browser tab on reload
-        run_server_kwargs["browser"] = False
-
-        run_process(
-            path=project_path,
-            target=run_server,
-            kwargs=run_server_kwargs,
-            watcher_cls=RegExpWatcher,
-            watcher_kwargs=dict(re_files=r"^.*(\.yml|\.yaml|\.py)$"),
-        )
-
-    except Exception as ex:  # pragma: no cover
-        traceback.print_exc()
-        raise KedroCliError(str(ex)) from ex
 
 
 cli.add_command(catalog)

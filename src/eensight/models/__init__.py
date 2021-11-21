@@ -1,5 +1,4 @@
-from .composite import CompositePredictor
-from .ensemble import EnsemblePredictor
-from .grouped import GroupedPredictor
-from .linear import LinearPredictor
-from .seasonal import SeasonalDecomposer
+from ._composite import AggregatePredictor, CompositePredictor
+from ._gradient_boosting import BoostedTreeRegressor
+
+__all__ = ["AggregatePredictor", "BoostedTreeRegressor", "CompositePredictor"]

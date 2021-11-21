@@ -4,98 +4,74 @@
 # This source code is licensed under the Apache License, Version 2.0 found in the
 # LICENSE file in the root directory of this source tree.
 
-import warnings
-
 import numpy as np
 import pandas as pd
-from hdbscan import HDBSCAN
-from joblib import Memory
+from feature_encoders.utils import check_X
 from sklearn.base import TransformerMixin
+from sklearn.cluster import DBSCAN
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.utils.validation import check_is_fitted
 
 from eensight.base import BaseHeterogeneousEnsemble
-from eensight.utils import check_X
+from eensight.utils import recover_missing_dates
 
 NOISE = -1
 
 
 class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
-    """
-    A composite transformer model that uses HDBSCAN (Hierarchical Density-Based
-    Spatial Clustering of Applications with Noise) to cluster the input data and
-    a KNeighborsClassifier to predict the clusters for unseen inputs.
+    """Create cluster features.
+
+    A composite transformer model that uses `DBSCAN` (Density-Based Spatial Clustering
+    of Applications with Noise) to cluster the input data and a `KNeighborsClassifier`
+    to assign clusters to unseen inputs.
 
     Args:
-        min_cluster_size : int, optional (default=5)
-            The minimum size of clusters; single linkage splits that contain
-            fewer points than this will be considered points "falling out" of a
-            cluster rather than a cluster splitting into two new clusters.
-        min_samples : int, optional (default=5)
-            The number of samples in a neighbourhood for a point to be
-            considered a core point. This parameter controls what the clusterer
-            identifies as noise.
-        metric : string, or callable, optional (default='euclidean')
-            The metric to use when calculating distance between instances in a
-            feature array. If metric is a string or callable, it must be one of
-            the options allowed by metrics.pairwise.pairwise_distances for its
-            metric parameter. If metric is "precomputed", X is assumed to be a
-            distance matrix and must be square.
-        transformer : An object that implements a `fit_transform` method (default=None)
-            The `fit_transform` method is used for transforming the input into a form
-            that is understood by the distance metric.
-        memory : Instance of joblib.Memory or string (optional)
-            Used to cache the output of the computation of the tree.
-            If a string is given, it is the path to the caching directory.
-        allow_single_cluster : bool, optional (default=True)
-            By default HDBSCAN* will not produce a single cluster, setting this
-            to True will override this and allow single cluster results in
-            the case that you feel this is a valid result for your dataset.
-        cluster_selection_method : string, optional (default='eom')
-            The method used to select clusters from the condensed tree. The
-            standard approach for HDBSCAN* is to use an Excess of Mass algorithm
-            to find the most persistent clusters. Alternatively you can instead
-            select the clusters at the leaves of the tree -- this provides the
-            most fine grained and homogeneous clusters. Options are:
-                * ``eom``
-                * ``leaf``
-        n_neighbors : int, default=1
-            Number of neighbors to use by default for :meth:`kneighbors` queries.
-        weights : {'uniform', 'distance'} or callable, default='uniform'
-            weight function used in prediction. Possible values:
-            - 'uniform' : uniform weights.  All points in each neighborhood
-            are weighted equally.
-            - 'distance' : weight points by the inverse of their distance.
-            In this case, closer neighbors of a query point will have a
-            greater influence than neighbors which are further away.
-            - [callable] : a user-defined function which accepts an
-            array of distances, and returns an array of the same shape
-            containing the weights.
-        output_name : str, default='cluster'
-            The name of the output dataframe's column that includes the cluster
-            information.
+        eps (float, optional): The maximum distance between two samples for one to be
+            considered as in the neighborhood of the other. This is not a maximum bound
+            on the distances of points within a cluster. Defaults to 0.5.
+        min_samples (int, optional): The number of samples in a neighbourhood for
+            a point to be considered a core point. This parameter controls what the
+            clusterer identifies as noise. Defaults to 5.
+        metric (string or callable, optional): The metric to use when calculating
+            distance between instances in a feature array. It must be one of the options
+            allowed by metrics.pairwise.pairwise_distances for its metric parameter. Defaults
+            to 'euclidean'.
+        metric_params (dict, optional): Additional keyword arguments for the metric function.
+            Defaults to None.
+        transformer (sklearn.base.BaseEstimator, optional): An object that implements a
+            `fit_transform` method, which is used for transforming the input into a form
+            that is understood by the distance metric. Defaults to None.
+        n_jobs (int, optional): The number of parallel jobs to run for the clusterer. ``None``
+            means 1 unless in a :obj:`joblib.parallel_backend` context. ``-1`` means using all
+            processors. Defaults to None.
+        n_neighbors (int, optional): Number of neighbors to use by default for :meth:`kneighbors`
+            queries. This parameter is passed to ``sklearn.neighbors.KNeighborsClassifier``.
+            Defaults to 1.
+        weights ({'uniform', 'distance'} or callable, optional): The weight function used in
+            prediction. This parameter is passed to ``sklearn.neighbors.KNeighborsClassifier``.
+            Defaults to 'uniform'.
+        output_name (str, optional): The name of the output dataframe's column that includes
+            the cluster information. Defaults to 'cluster'.
     """
 
     def __init__(
         self,
-        min_cluster_size=5,
+        eps=0.5,
         min_samples=5,
         metric="euclidean",
+        metric_params=None,
         transformer=None,
-        memory=Memory(None, verbose=0),
-        allow_single_cluster=True,
-        cluster_selection_method="eom",
+        n_jobs=None,
         n_neighbors=1,
         weights="uniform",
         output_name="cluster",
     ):
-        self.min_cluster_size = min_cluster_size
+        self.eps = eps
         self.min_samples = min_samples
         self.metric = metric
+        self.metric_params = metric_params
         self.transformer = transformer
-        self.memory = memory
-        self.allow_single_cluster = allow_single_cluster
-        self.cluster_selection_method = cluster_selection_method
+        self.n_jobs = n_jobs
         self.n_neighbors = n_neighbors
         self.weights = weights
         self.output_name = output_name
@@ -104,13 +80,12 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
             estimators=[
                 (
                     "assign_clusters",
-                    HDBSCAN(
-                        min_cluster_size=min_cluster_size,
+                    DBSCAN(
+                        eps=eps,
                         min_samples=min_samples,
                         metric=metric,
-                        memory=memory,
-                        allow_single_cluster=allow_single_cluster,
-                        cluster_selection_method=cluster_selection_method,
+                        metric_params=metric_params,
+                        n_jobs=n_jobs,
                     ),
                 ),
                 (
@@ -121,6 +96,19 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         )
 
     def fit(self, X: pd.DataFrame, y=None):
+        """Fit the feature generator on the available data.
+
+        Args:
+            X (pandas.DataFrame): The input dataframe.
+            y (None, optional): Ignored. Defaults to None.
+
+        Raises:
+            ValueError: If the input data do not pass the checks of
+                `feature_encoders.utils.check_X`.
+
+        Returns:
+            ClusterFeatures: The fitted instance.
+        """
         if self.transformer is not None:
             X = self.transformer.fit_transform(X)
 
@@ -133,9 +121,7 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
             X.index = X.index.map(pd.to_datetime)
 
         clusterer = self.named_estimators["assign_clusters"]
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            clusterer.fit(X)
+        clusterer = clusterer.fit(X)
 
         self.clusters_ = pd.DataFrame(
             data=clusterer.labels_,
@@ -158,6 +144,14 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         return self
 
     def transform(self, X: pd.DataFrame):
+        """Apply the feature generator.
+
+        Args:
+            X (pandas.DataFrame): The input dataframe.
+
+        Returns:
+            pandas.DataFrame: The transformed dataframe.
+        """
         check_is_fitted(self, "fitted_")
 
         if self.transformer is not None:
@@ -179,9 +173,13 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         )
 
         if index is not None:
-            out = pd.Series(np.nan, index=index)
-            for dt, grouped in pred.groupby(lambda x: x):
-                out = out.mask(out.index.date == dt, grouped[self.output_name].item())
-            pred = out.to_frame(self.output_name)
+            idx_ext = recover_missing_dates(pd.DataFrame(index=index)).index
+            pred.index = pred.index.map(pd.to_datetime).map(
+                lambda x: x.replace(hour=0, minute=0, second=0)
+            )
+            pred = (
+                idx_ext.to_frame().join(pred).fillna(method="ffill")[[self.output_name]]
+            )
+            pred = pred.reindex(index)
 
         return pred

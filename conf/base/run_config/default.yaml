@@ -1,5 +1,5 @@
 
-model: towt
+base_model: towt
 pipeline: null 
 runner: null 
 from_inputs: null 
@@ -9,7 +9,7 @@ to_nodes: null
 nodes: null 
 tags: 
   - train
-  - post
+  - apply
 load_versions: null
 extra_params: null 
 

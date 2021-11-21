@@ -4,216 +4,127 @@
 # This source code is licensed under the Apache License, Version 2.0 found in the
 # LICENSE file in the root directory of this source tree.
 
+import datetime
+
 import numpy as np
 import pandas as pd
-import scipy
-from pandas.api.types import is_bool_dtype as is_bool
-from pandas.api.types import is_categorical_dtype as is_category
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from pandas.api.types import is_integer_dtype as is_integer
-from pandas.api.types import is_object_dtype as is_object
-from sklearn.utils import check_array
-from sklearn.utils.validation import column_or_1d
 
 
-def maybe_reshape_2d(arr):
-    # Reshape output so it's always 2-d and long
-    if arr.ndim < 2:
-        arr = arr.reshape(-1, 1)
-    return arr
+def merge_hours_hours(left: pd.DataFrame, right: pd.DataFrame):
+    """Merge two dataframes that both have a time step <=pd.Timedelta("1H").
 
+    Args:
+        left (pandas.DataFrame): The first dataframe to merge.
+        right (pandas.DataFrame): The second dataframe to merge.
 
-def as_list(val):
-    """Helper function, always returns a list of the input value."""
-    if isinstance(val, str):
-        return [val]
-    if hasattr(val, "__iter__"):
-        return list(val)
-    if val is None:
-        return []
-    return [val]
-
-
-def as_series(x):
-    """Helper function to cast an iterable to a Pandas Series object."""
-    if isinstance(x, pd.Series):
-        return x
-    if isinstance(x, pd.DataFrame):
-        return x.iloc[:, 0]
-    else:
-        return pd.Series(column_or_1d(x))
-
-
-def get_categorical_cols(X, int_is_categorical=True):
+    Returns:
+        pandas.DataFrame: The merged dataframe.
     """
-    Returns names of categorical columns in the input DataFrame.
-    """
-    obj_cols = []
-    for col in X.columns:
-        # check if it is date
-        if is_datetime(X[col]):
-            continue
-        # check if it is bool, object or category
-        if is_bool(X[col]) or is_object(X[col]) or is_category(X[col]):
-            obj_cols.append(col)
-            continue
-        # check if it is integer
-        if int_is_categorical and is_integer(X[col]):
-            obj_cols.append(col)
-            continue
-    return obj_cols
-
-
-def get_datetime_data(X, col_name=None):
-    if col_name is not None:
-        dt_column = X[col_name]
-    else:
-        dt_column = X.index.to_series()
-
-    col_dtype = dt_column.dtype
-    if isinstance(col_dtype, pd.core.dtypes.dtypes.DatetimeTZDtype):
-        col_dtype = np.datetime64
-    if not np.issubdtype(col_dtype, np.datetime64):
-        dt_column = pd.to_datetime(dt_column, infer_datetime_format=True)
-    return dt_column
-
-
-def check_X(X, exists=None, int_is_categorical=True, return_col_info=False):
-    if not isinstance(X, pd.DataFrame):
-        raise ValueError("Input values are expected as pandas DataFrames.")
-
-    exists = as_list(exists)
-    for name in exists:
-        if name not in X:
-            raise ValueError(f"Regressor {name} missing from dataframe")
-
-    categorical_cols = get_categorical_cols(X, int_is_categorical=int_is_categorical)
-    numeric_cols = X.columns.difference(categorical_cols)
-
-    if (len(categorical_cols) > 0) and X[categorical_cols].isnull().values.any():
-        raise ValueError("Found NaN values in input's categorical data")
-    if (len(numeric_cols) > 0) and np.any(~np.isfinite(X[numeric_cols])):
-        raise ValueError("Found NaN or Inf values in input's numerical data")
-
-    if return_col_info:
-        return X, categorical_cols, numeric_cols
-    return X
-
-
-def check_y(y, index=None):
-    if isinstance(y, pd.DataFrame) and (y.shape[1] == 1):
-        target_name = y.columns[0]
-    elif isinstance(y, pd.Series):
-        target_name = y.name or "_target_values_"
-    else:
-        raise ValueError(
-            "This estimator accepts target inputs as "
-            "`pd.Series` or 1D `pd.DataFrame`"
-        )
-
-    if (index is not None) and not y.index.equals(index):
-        raise ValueError(
-            "Input data has different index than the one "
-            "that was provided for comparison"
-        )
-
-    y = pd.DataFrame(
-        data=check_array(y, ensure_2d=False), index=y.index, columns=[target_name]
+    merged = pd.merge_asof(
+        left,
+        right,
+        left_index=True,
+        right_index=True,
+        direction="nearest",
+        tolerance=pd.Timedelta("1H"),
     )
-    return y
+    return merged
 
 
-def tensor_product(a, b, reshape=True):
+def merge_hours_days(left: pd.DataFrame, right: pd.DataFrame):
+    """Merge two dataframes where the first has a time step <=pd.Timedelta("1H")
+    and the second has a time step ==pd.Timedelta("1D").
+
+    Args:
+        left (pd.DataFrame): The first dataframe to merge (hourly resolution).
+        right (pd.DataFrame): The second dataframe to merge (daily resolution).
+
+    Returns:
+        pandas.DataFrame: The merged dataframe.
     """
-    Compute the tensor product of two matrices a and b
-    If a is (n, m_a), b is (n, m_b),
-    then the result is
-        (n, m_a * m_b) if reshape = True.
-    or
-        (n, m_a, m_b) otherwise
+    if isinstance(right.index[0], datetime.date):
+        right.index = right.index.map(pd.to_datetime)
 
-    Parameters
-    ---------
-    a : array-like of shape (n, m_a)
-    b : array-like of shape (n, m_b)
-    reshape : bool, default True
-        whether to reshape the result to be 2-dimensional ie
-        (n, m_a * m_b)
-        or return a 3-dimensional tensor ie
-        (n, m_a, m_b)
+    start = left.index.time.min()
+    right.index = right.index.map(pd.to_datetime).map(
+        lambda x: x.replace(hour=start.hour, minute=start.minute, second=start.second)
+    )
 
-    Returns
-    -------
-    dense np.ndarray of shape
-        (n, m_a * m_b) if reshape = True.
-    or
-        (n, m_a, m_b) otherwise
+    right_to_hourly = left.index.to_frame().join(right).loc[:, right.columns]
+    for _, grouped in right_to_hourly.groupby(lambda x: x.date):
+        if np.any(grouped.iloc[[0]].notna()):
+            right_to_hourly.loc[grouped.index, :] = right_to_hourly.loc[
+                grouped.index, :
+            ].fillna(method="ffill")
+
+    return merge_hours_hours(left, right_to_hourly)
+
+
+def recover_missing_dates(data: pd.DataFrame):
+    """Add missing timestamps.
+
+    If there are missing timestamps, they are added and the respective data is treated
+    as missing values.
+
+    Args:
+        data (pandas.DataFrame): The data to correct.
+
+    Returns:
+        pandas.DataFrame: The input data with the missing timestamps added.
     """
-    if (a.ndim != 2) or (b.ndim != 2):
-        raise ValueError("Inputs must be 2-dimensional")
+    dt = data.index.to_series().diff()
+    time_step = dt.iloc[dt.values.nonzero()[0]].min()
 
-    na, ma = a.shape
-    nb, mb = b.shape
+    if time_step == pd.Timedelta("0 days 00:00:00"):
+        raise ValueError("Input data contains dublicate dates")
 
-    if na != nb:
-        raise ValueError("Both arguments must have the same number of samples")
+    full_range = pd.date_range(
+        start=datetime.datetime.combine(data.index.min().date(), datetime.time(0, 0)),
+        end=datetime.datetime.combine(
+            data.index.max().date() + datetime.timedelta(days=1), datetime.time(0, 0)
+        ),
+        freq=time_step,
+    )[:-1]
 
-    if scipy.sparse.issparse(a):
-        a = a.A
-    if scipy.sparse.issparse(b):
-        b = b.A
-
-    product = a[..., :, None] * b[..., None, :]
-
-    if reshape:
-        return product.reshape(na, ma * mb)
-
-    return product
+    index_name = data.index.name
+    data = pd.DataFrame(index=full_range).join(data, how="left")
+    data.index.set_names(index_name, inplace=True)
+    return data
 
 
-def add_constant(data, prepend=True, has_constant="skip"):
+def create_groups(X: pd.DataFrame, group_block: str):
+    """Greate groups for the input data.
+
+    Args:
+        X (pandas.DataFrame): The input data.
+        group_block ({'day', 'week', 'month'}): Parameter that defines what
+            constitutes an indivisible group of data.
+
+    Raises:
+        ValueError: If `group_block` is not one of 'day', 'week' or 'month'.
+
+    Returns:
+        pandas Series: The groups for all observations in input data.
     """
-    Add a column of ones to an array.
+    if group_block == "day":
+        grouped = X.groupby(lambda x: x.dayofyear)
+    elif group_block == "week":
+        grouped = X.groupby(lambda x: x.isocalendar()[1])
+    elif group_block == "month":
+        grouped = X.groupby(lambda x: x.month)
+    else:
+        raise ValueError("`groups` can be either `day`, `week` or `month`.")
 
-    Parameters
-    ----------
-    data : array_like
-        A column-ordered design matrix.
-    prepend : bool
-        If true, the constant is in the first column.  Else the constant is
-        appended (last column).
-    has_constant : str {'raise', 'add', 'skip'}
-        Behavior if ``data`` already has a constant. The default will return
-        data without adding another constant. If 'raise', will raise an
-        error if any column has a constant value. Using 'add' will add a
-        column of 1s if a constant column is present.
+    groups = None
+    for i, (_, group) in enumerate(grouped):
+        groups = pd.concat([groups, pd.Series(i, index=group.index)])
+    return groups.reindex(X.index)
 
-    Returns
-    -------
-    array_like
-        The original values with a constant (column of ones) as the first or
-        last column. Returned value type depends on input type.
-    """
-    x = np.asanyarray(data)
-    ndim = x.ndim
-    if ndim == 1:
-        x = x[:, None]
-    elif x.ndim > 2:
-        raise ValueError("Only implemented for 2-dimensional arrays")
 
-    is_nonzero_const = np.ptp(x, axis=0) == 0
-    is_nonzero_const &= np.all(x != 0.0, axis=0)
-    if is_nonzero_const.any():
-        if has_constant == "skip":
-            return x
-        elif has_constant == "raise":
-            if ndim == 1:
-                raise ValueError("data is constant.")
-            else:
-                columns = np.arange(x.shape[1])
-                cols = ",".join([str(c) for c in columns[is_nonzero_const]])
-                raise ValueError(f"Column(s) {cols} are constant.")
-
-    x = [np.ones(x.shape[0]), x]
-    x = x if prepend else x[::-1]
-    return np.column_stack(x)
+def split_training_data(data):
+    # We train the predictive models without outliers:
+    X_train = data.loc[~data["consumption_outlier"]].drop(
+        ["consumption", "consumption_outlier"], axis=1
+    )
+    y_train = data.loc[X_train.index, ["consumption"]]
+    return X_train, y_train

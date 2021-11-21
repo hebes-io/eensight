@@ -1,0 +1,26 @@
+# parameters for the `validate` pipeline
+
+of_cross_validate:
+  group_by: week
+  stratify_by: month
+  n_splits: 3
+  n_repeats: 5
+  keep_estimators: true
+  n_jobs: -1
+  verbose: true
+  fit_params: null
+  random_state: null 
+
+of_conformal_predictor:
+  add_normalizer: true
+  extra_regressors: null 
+  n_estimators: 100
+  min_samples_leaf: 0.05
+  max_samples: 0.8
+  n_jobs: -1
+  
+
+  
+
+
+

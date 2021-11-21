@@ -1,0 +1,53 @@
+add_features:
+  time:
+    type: datetime
+    subset: month, hourofweek, hour
+
+regressors:
+  month:
+    feature: month
+    type: categorical
+    encode_as: onehot
+
+  tow:
+    feature: hourofweek
+    type: categorical
+    encode_as: onehot
+
+  hour:
+    feature: hour
+    type: categorical
+    max_n_categories: 3  
+    encode_as: onehot
+    interaction_only: true
+
+  holidays:
+    feature: holiday
+    type: categorical
+    max_n_categories: 2
+    excluded_categories: _novalue_ # default value for imputing missing categorical data
+    stratify_by: hour 
+    min_samples_leaf: 1
+    interaction_only: true
+  
+  lin_temperature:
+    feature: temperature
+    type: linear
+  
+  flex_temperature:
+    feature: temperature
+    type: spline
+    n_knots: 5
+    degree: 1
+    strategy: uniform 
+    extrapolation: constant
+    interaction_only: true
+
+interactions:
+  hour, holidays: ~
+  tow, flex_temperature:
+    tow:
+      max_n_categories: 2 
+      stratify_by: temperature 
+      min_samples_leaf: 15 
+

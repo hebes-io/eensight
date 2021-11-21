@@ -29,8 +29,8 @@ DATA_ROOT = "data"
 # Define the default site name
 DEFAULT_CATALOG = "demo"
 
-# Define the default model
-DEFAULT_MODEL = "towt"
+# Define the default base model
+DEFAULT_BASE_MODEL = "towt"
 
 # Define the default run configuration file
 DEFAULT_RUN_CONFIG = "default"

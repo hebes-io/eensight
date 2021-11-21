@@ -14,14 +14,14 @@ from kedro.io import DataCatalog
 from eensight.settings import PROJECT_PATH
 
 
-def load_catalog(catalog, partial_catalog=False, model=None, env="local"):
+def load_catalog(catalog, partial_catalog=False, base_model=None, env="local"):
     """A utility function that loads the data catalog."""
     path = Path(PROJECT_PATH)
     bootstrap_project(path)
 
     extra_params = {"catalog": catalog, "partial_catalog": partial_catalog}
-    if model is not None:
-        extra_params["model"] = model
+    if base_model is not None:
+        extra_params["base_model"] = base_model
 
     session = KedroSession.create(
         package_name="eensight",

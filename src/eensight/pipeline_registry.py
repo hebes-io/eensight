@@ -5,10 +5,7 @@ from typing import Dict
 
 from kedro.pipeline import Pipeline
 
-from eensight.pipelines import day_typing as dt
-from eensight.pipelines import model_selection as ms
-from eensight.pipelines import post_estimation as post
-from eensight.pipelines import preprocessing as pre
+from eensight.pipelines import baseline, compare, daytype, predict, preprocess, validate
 
 
 def register_pipelines() -> Dict[str, Pipeline]:
@@ -18,18 +15,24 @@ def register_pipelines() -> Dict[str, Pipeline]:
         A mapping from a pipeline name to a ``Pipeline`` object.
 
     """
-    preprocess_pipeline = pre.create_pipeline()
-    daytype_pipeline = dt.create_pipeline()
-    baseline_pipeline = ms.create_pipeline()
-    post_pipeline = post.create_pipeline()
+    preprocess_pipeline = preprocess.create_pipeline()
+    daytype_pipeline = daytype.create_pipeline()
+    baseline_pipeline = baseline.create_pipeline()
+    validate_pipeline = validate.create_pipeline()
+    predict_pipeline = predict.create_pipeline()
+    compare_pipeline = compare.create_pipeline()
 
     return {
         "preprocess": preprocess_pipeline,
         "daytype": daytype_pipeline,
         "baseline": baseline_pipeline,
-        "post": post_pipeline,
+        "validate": validate_pipeline,
+        "predict": predict_pipeline,
+        "compare": compare_pipeline,
         "__default__": preprocess_pipeline
         + daytype_pipeline
         + baseline_pipeline
-        + post_pipeline,
+        + validate_pipeline
+        + predict_pipeline
+        + compare_pipeline,
     }

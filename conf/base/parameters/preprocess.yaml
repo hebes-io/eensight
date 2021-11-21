@@ -1,44 +1,54 @@
 # parameters for the `preprocess` pipeline
 
+of_drift_detection:
+  stat_size: 150
+  stat_distance: 0.1
+  window: 300
+  alpha: 0.005
+
 find_outliers_for: 
   - consumption
   - temperature
 
-for_global_filter:
+of_global_filter:
   consumption:
     no_change_window: 3
+    max_pct_of_dummy: 0.1
     min_value: null 
     max_value: null
     allow_zero: false
     allow_negative: false
   temperature:
     no_change_window: 3
+    max_pct_of_dummy: 0.1
     min_value: null 
     max_value: null
     allow_zero: true
     allow_negative: true
 
-for_seasonal_decompose:
+of_seasonal_decompose:
   consumption:
-    dt: null 
+    ds: null 
     add_trend: false
-    alpha: 1
-    return_conditions: false
+    min_samples: 0.8
+    alpha: 0.01
     return_model: false
   temperature:
-    dt: null 
-    alpha: 1
-    return_model: false
+    ds: null 
+    min_samples: 0.8
+    alpha: 0.01
+    return_model: false  
 
-for_global_outlier:
-  c: 5
+of_global_outlier:
+  c: 7
 
-for_local_outlier:
-  min_samples: 0.6 
-  c: 5
+of_local_outlier:
+  min_samples: 0.66 
+  c: 8
 
-max_outlier_pct: 0.005
-
-for_linear_impute:
+of_linear_impute:
   temperature:
     window: 6
+
+max_missing_pct: 0.1
+max_outlier_pct: 0.005

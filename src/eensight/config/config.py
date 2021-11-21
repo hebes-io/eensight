@@ -6,29 +6,38 @@
 
 # Adapted from https://github.com/quantumblacklabs/kedro/blob/0.17.5/kedro/config/config.py
 
-import logging
 from functools import reduce
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Union
 
+from feature_encoders.utils import as_list
 from kedro.config import BadConfigException, ConfigLoader
-from kedro.config.config import MissingConfigException, _check_duplicate_keys
+from kedro.config.config import MissingConfigException
 from omegaconf import DictConfig, OmegaConf
 
-from eensight.utils import as_list
 
-logger = logging.getLogger("config-loader")
+def _check_duplicate_keys(
+    processed_files: Dict[Path, AbstractSet[str]], filepath: Path, conf: Dict[str, Any]
+):
+    """Check duplicate keys.
 
+    Copied from https://github.com/quantumblacklabs/kedro/blob/0.17.5/kedro/config/config.py
+    so that to avoid importing a private function from kedro.
+    """
+    duplicates = []
 
-def _remove_duplicates(items: Iterable[str]):
-    """Remove duplicates while preserving the order."""
-    unique_items = []  # type: List[str]
-    for item in items:
-        if item not in unique_items:
-            unique_items.append(item)
-        else:
-            logger.warning(f"Skipping re-loading from configuration path: {item}")
-    return unique_items
+    for processed_file, keys in processed_files.items():
+        overlapping_keys = conf.keys() & keys
+
+        if overlapping_keys:
+            sorted_keys = ", ".join(sorted(overlapping_keys))
+            if len(sorted_keys) > 100:
+                sorted_keys = sorted_keys[:100] + "..."
+            duplicates.append(f"{processed_file}: {sorted_keys}")
+
+    if duplicates:
+        dup_str = "\n- ".join(duplicates)
+        raise ValueError(f"Duplicate keys found in {filepath} and:\n- {dup_str}")
 
 
 class OmegaConfigLoader(ConfigLoader):
@@ -41,6 +50,17 @@ class OmegaConfigLoader(ConfigLoader):
     When the same key appears in any 2 config files located in different
     ``conf_path`` directories, the last processed config path takes
     precedence and overrides this key.
+
+    Args:
+        conf_paths (str or list of str): Non-empty path or list of paths
+            to configuration directories.
+        globals_pattern (str, optional): Optional keyword-only argument
+            specifying a glob pattern. Files that match this pattern will
+            be loaded as files containing global values for variable
+            interpolation. Defaults to None.
+
+    Raises:
+        ValueError: If ``conf_paths`` is empty.
     """
 
     def __init__(
@@ -48,20 +68,8 @@ class OmegaConfigLoader(ConfigLoader):
         conf_paths: Union[str, Iterable[str]],
         globals_pattern: Optional[str] = None,
     ):
-        """Instantiate a ConfigLoader.
-
-        Args:
-            conf_paths: str or list of str
-                Non-empty path or list of paths to configuration directories.
-            globals_pattern: Optional keyword-only argument specifying a glob
-                pattern. Files that match the pattern will be loaded as files
-                containing global values for variable interpolation.
-
-        Raises:
-            ValueError: If ``conf_paths`` is empty.
-        """
-        super().__init__(_remove_duplicates(conf_paths))
-        self.globals_pattern = as_list(globals_pattern)
+        super().__init__(conf_paths)
+        self.globals_pattern = globals_pattern
         if globals_pattern is not None:
             self._register_global_resolvers()
 
@@ -78,7 +86,7 @@ class OmegaConfigLoader(ConfigLoader):
                 )
 
             filepaths = self._lookup_config_filepaths(
-                conf_path, self.globals_pattern, processed_files
+                conf_path, as_list(self.globals_pattern), processed_files
             )
 
             for global_conf in filepaths:
@@ -97,14 +105,14 @@ class OmegaConfigLoader(ConfigLoader):
         """Load an individual config file using `OmegaConf` as a backend.
 
         Args:
-            config_file: Path to a config file to process.
+            config_file (Path): Path to a config file to process.
 
         Raises:
             BadConfigException: If configuration is poorly formatted and
                 cannot be loaded.
 
         Returns:
-            Parsed configuration as omegaconf.DictConfig.
+            omegaconf.DictConfig: Parsed configuration as a DictConfig.
         """
         try:
             conf = OmegaConf.load(config_file)
@@ -126,15 +134,17 @@ class OmegaConfigLoader(ConfigLoader):
         a given list of glob patterns from a specific path.
 
         Args:
-            config_filepaths: Configuration files sorted in the order of precedence.
+            config_filepaths (list of Path): Configuration files sorted in
+                the order of precedence.
 
         Raises:
-            ValueError: If 2 or more configuration files contain the same key(s).
+            ValueError: If two or more configuration files contain the same
+                key(s).
             BadConfigException: If configuration is poorly formatted and
                 cannot be loaded.
 
         Returns:
-            Resulting configuration dictionary as omegaconf.DictConfig.
+            omegaconf.DictConfig: Resulting configuration dictionary as a DictConfig.
         """
         aggregate_config = OmegaConf.create()
         seen_file_to_keys = {}
@@ -152,28 +162,25 @@ class OmegaConfigLoader(ConfigLoader):
         return them in the form of a config dictionary.
 
         Args:
-            patterns: Glob patterns to match. Files, which names match
-                any of the specified patterns, will be processed.
+            *patterns: Glob patterns to match. Files with names matching any of
+                the specified patterns will be processed.
 
         Raises:
-            ValueError: If 2 or more configuration files inside the same
-                config path (or its subdirectories) contain the same
-                top-level key.
-            MissingConfigException: If no configuration files exist within
-                a specified config path.
-            BadConfigException: If configuration is poorly formatted and
-                cannot be loaded.
+            ValueError: If two or more configuration files inside the same config
+                path (or its subdirectories) contain the same top-level key.
+            MissingConfigException: If no configuration files exist within a specified
+                config path.
+            BadConfigException: If configuration is poorly formatted and cannot be loaded.
 
         Returns:
-            Dict[str, Any]:  A Python dictionary with the combined
-                configuration from all configuration files. **Note:** any keys
-                that start with `_` will be ignored.
-        """
+            Dict[str, Any]:  A dict with the combined configuration from all configuration files.
 
+        Note:
+            Any keys that start with `_` will be ignored.
+        """
         if not patterns:
             raise ValueError(
-                "`patterns` must contain at least one glob "
-                "pattern to match config filenames against."
+                "`patterns` must contain at least one glob pattern to match filenames against."
             )
 
         config = OmegaConf.create()

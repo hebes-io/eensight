@@ -1,0 +1,8 @@
+holidays:
+  validate: eensight.features.HolidaySchema
+  generate: eensight.features.HolidayFeatures
+
+occupancy:
+  validate: eensight.features.OccupancySchema
+  generate: eensight.features.OccupancyFeatures
+

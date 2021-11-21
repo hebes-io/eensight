@@ -1,4 +1,17 @@
 
+train.data_with_drift:
+  type: ${globals:types.csv}
+  filepath: >- 
+    ${site_name}/${globals:folders.intermediate}/train/data_with_drift.csv
+  load_args:
+    sep: ','
+    index_col : 0
+    parse_dates : 
+      - 0
+  save_args:
+    index: true
+  versioned : ${versioned}
+
 train.preprocessed_data:
   type: ${globals:types.csv}
   filepath: >- 
@@ -12,21 +25,9 @@ train.preprocessed_data:
     index: true
   versioned : ${versioned}
 
-test.preprocessed_data:
+apply.preprocessed_data:
   type: ${globals:types.csv}
-  filepath: ${site_name}/${globals:folders.primary}/test/preprocessed.csv
-  load_args:
-    sep: ','
-    index_col : 0
-    parse_dates :
-      - 0
-  save_args:
-    index: true
-  versioned : ${versioned}
-
-post.preprocessed_data:
-  type: ${globals:types.csv}
-  filepath: ${site_name}/${globals:folders.primary}/post/preprocessed.csv
+  filepath: ${site_name}/${globals:folders.primary}/apply/preprocessed.csv
   load_args:
     sep: ','
     index_col : 0
@@ -49,10 +50,10 @@ train.model_input_data:
     index: true
   versioned : ${versioned}
 
-test.model_input_data:
+apply.model_input_data:
   type: ${globals:types.csv}
   filepath: >- 
-    ${site_name}/${globals:folders.model_input}/test/model_input.csv
+    ${site_name}/${globals:folders.model_input}/apply/model_input.csv
   load_args:
     sep: ','
     index_col : 0
@@ -62,20 +63,7 @@ test.model_input_data:
     index: true
   versioned : ${versioned}
 
-post.model_input_data:
-  type: ${globals:types.csv}
-  filepath: >- 
-    ${site_name}/${globals:folders.model_input}/post/model_input.csv
-  load_args:
-    sep: ','
-    index_col : 0
-    parse_dates : 
-      - 0
-  save_args:
-    index: true
-  versioned : ${versioned}
-
-data_adequacy_summary:
+train.data_adequacy:
   type: ${globals:types.csv}
   filepath: >-
     ${site_name}/${globals:folders.report}/train/adequacy_summary.csv
@@ -86,7 +74,7 @@ data_adequacy_summary:
     index: true
   versioned : ${versioned}
 
-matrix_profile_scores:
+train.matrix_profile_scores:
   type: ${globals:types.csv}
   filepath: >- 
     ${site_name}/${globals:folders.primary}/train/matrix_profile_scores.csv
@@ -99,24 +87,34 @@ matrix_profile_scores:
     index: true
   versioned : ${versioned}
 
-prototype_days:
+train.prototype_days:
   type: ${globals:types.pickle}
   filepath: ${site_name}/${globals:folders.primary}/train/prototype_days.pickle
   versioned : ${versioned}
 
-distance_metrics:
+train.distance_metrics:
   type: ${globals:types.pickle}
   filepath: ${site_name}/${globals:folders.model_input}/train/distance_metrics.pickle
   versioned : ${versioned}
 
-ensemble_model:
+opt_params:
+  type: ${globals:types.json}
+  filepath: ${site_name}/${globals:folders.model}/train/opt_params.json
+  versioned : ${versioned}
+
+mean_model:
   type: ${globals:types.pickle}
-  filepath: ${site_name}/${globals:folders.model}/train/ensemble_model.pickle
+  filepath: ${site_name}/${globals:folders.model}/train/mean_model.pickle
   versioned : ${versioned}
 
 cv_model:
   type: ${globals:types.pickle}
   filepath: ${site_name}/${globals:folders.model}/train/cv_model.pickle
+  versioned : ${versioned}
+
+conformal_model:
+  type: ${globals:types.pickle}
+  filepath: ${site_name}/${globals:folders.model}/train/conformal_model.pickle
   versioned : ${versioned}
 
 train.model_prediction:
@@ -131,11 +129,11 @@ train.model_prediction:
   save_args:
     index: true
   versioned : ${versioned}
-
-test.model_prediction:
+  
+apply.model_prediction:
   type: ${globals:types.csv}
   filepath: >- 
-    ${site_name}/${globals:folders.model_output}/test/model_prediction.csv
+    ${site_name}/${globals:folders.model_output}/apply/model_prediction.csv
   load_args:
     sep: ','
     index_col : 0
@@ -145,23 +143,10 @@ test.model_prediction:
     index: true
   versioned : ${versioned}
 
-post.model_prediction:
+apply.savings:
   type: ${globals:types.csv}
   filepath: >- 
-    ${site_name}/${globals:folders.model_output}/post/model_prediction.csv
-  load_args:
-    sep: ','
-    index_col : 0
-    parse_dates : 
-      - 0
-  save_args:
-    index: true
-  versioned : ${versioned}
-
-post.savings:
-  type: ${globals:types.csv}
-  filepath: >- 
-    ${site_name}/${globals:folders.model_output}/post/savings.csv
+    ${site_name}/${globals:folders.model_output}/apply/savings.csv
   load_args:
     sep: ','
     index_col : 0

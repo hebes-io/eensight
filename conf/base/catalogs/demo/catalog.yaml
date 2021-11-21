@@ -2,7 +2,7 @@ site_name : demo
 versioned : false   
 
 location:
-  country   : null  
+  country   : Italy   
   province  : null 
   state     : null 
 
@@ -22,13 +22,14 @@ train.root_input:
       index_col: 0
   filename_suffix: '.csv'
 
-test.root_input:
+apply.root_input:
   type: PartitionedDataSet
-  path: demo/01_raw/test
+  path: ${site_name}/01_raw/apply
   dataset:
     type: pandas.CSVDataSet
     load_args:
       sep: ','
       index_col: 0
   filename_suffix: '.csv'
+
   
