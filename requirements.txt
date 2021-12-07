@@ -18,4 +18,3 @@ seaborn>=0.11.1
 stumpy>=1.9.2
 Unidecode>=1.2.0
 
-
