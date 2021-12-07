@@ -9,13 +9,11 @@ import logging
 import pandas as pd
 from feature_encoders.utils import as_series
 
-from eensight.pipelines.validate import mpiw, picp
+from eensight.metrics import mpiw, picp
+from eensight.models._composite import AggregatePredictor
+from eensight.models._conformal import AggregatedCp
 
 logger = logging.getLogger("prediction")
-
-from eensight.models import AggregatePredictor
-
-from ..validate import AggregatedCp
 
 
 def apply_predict(

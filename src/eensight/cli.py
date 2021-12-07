@@ -23,11 +23,13 @@ from omegaconf import OmegaConf
 from eensight.config import OmegaConfigLoader
 from eensight.framework.cli.catalog import catalog
 from eensight.framework.cli.pipeline import pipeline
+from eensight.framework.cli.starter import resources
 from eensight.settings import (
     CONF_ROOT,
     DEFAULT_BASE_MODEL,
     DEFAULT_RUN_CONFIG,
     PROJECT_PATH,
+    RESOURCES_PATH,
 )
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -166,7 +168,7 @@ def run(
         env = "local"
 
         config_loader = OmegaConfigLoader(
-            [os.path.join(PROJECT_PATH, CONF_ROOT, "base", "run_config")]
+            [os.path.join(RESOURCES_PATH, CONF_ROOT, "base", "run_config")]
         )
         run_config = config_loader.get(
             f"{run_config}.*", f"{run_config}*/**", f"**/{run_config}.*"
@@ -241,3 +243,4 @@ def run(
 
 cli.add_command(catalog)
 cli.add_command(pipeline)
+cli.add_command(resources)

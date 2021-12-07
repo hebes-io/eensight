@@ -9,9 +9,9 @@ import logging
 import numpy as np
 import pandas as pd
 
-from eensight.models import AggregatePredictor
+from eensight.models._composite import AggregatePredictor
+from eensight.models._conformal import AggregatedCp
 
-from ..validate import AggregatedCp
 from .sampling import generate_samples
 
 logger = logging.getLogger("savings")

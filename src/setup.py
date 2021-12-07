@@ -1,12 +1,43 @@
 import os
+import re
+from glob import glob
 from pathlib import Path
+
 from setuptools import find_packages, setup
 
-from eensight import __version__
+name = "eensight"
+entry_point = "eensight = eensight.__main__:main"
+
+here = Path(os.path.dirname(__file__)).resolve()
+docs = str(here.parent.joinpath("docs"))
 
 
-here = os.path.abspath(os.path.dirname(__file__))
-docs = str(Path(here).parent.resolve().joinpath('docs'))
+# get package version
+with open(os.path.join(str(here), name, "__init__.py"), encoding="utf-8") as f:
+    result = re.search(r'__version__ = ["\']([^"\']+)', f.read())
+    if not result:
+        raise ValueError("Can't find the version in kedro/__init__.py")
+    version = result.group(1)
+
+
+# Get the long description from the README file
+with open(os.path.join(docs, "source", "overview.md"), encoding="utf-8") as f:
+    readme = f.read()
+
+
+# get the dependencies and installs
+with open("requirements.txt", encoding="utf-8") as f:
+    requires = [x.strip() for x in f if x.strip()]
+
+
+template_files = []
+for pattern in ["**/*", "**/.*", "**/.*/**", "**/.*/.**"]:
+    template_files.extend(
+        [
+            name.replace("eensight/", "", 1)
+            for name in glob("eensight/templates/" + pattern, recursive=True)
+        ]
+    )
 
 
 def dev_extras_require():
@@ -21,33 +52,19 @@ def dev_extras_require():
 
 def docs_extras_require():
     extras = [
-        'Sphinx >= 3.0.0',  # Force RTD to use >= 3.0.0
-        'docutils<0.18',
-        "nbsphinx==0.8.7",
-        'pylons-sphinx-themes >= 1.0.8',  # Ethical Ads
-        "myst-parser==0.15.2"
+        "Sphinx >= 3.0.0",  # Force RTD to use >= 3.0.0
+        "docutils < 0.18",
+        "nbsphinx >= 0.8.7",
+        "pylons-sphinx-themes >= 1.0.8",  # Ethical Ads
+        "myst-parse >= 0.15.2",
     ]
     return extras
 
 
-# get the dependencies and installs
-with open("requirements.txt", "r", encoding="utf-8") as f:
-    requires = []
-    for line in f:
-        req = line.split("#", 1)[0].strip()
-        if req and not req.startswith("--"):
-            requires.append(req)
-
-
-# Get the long description from the README file
-with open(os.path.join(docs, "source", "overview.md"), encoding="utf-8") as f:
-    readme = f.read()
-
-
 configuration = {
-    "name": "eensight",
-    "version": __version__,
-    "python_requires=": ">=3.7",
+    "name": name,
+    "version": version,
+    "python_requires": ">=3.7, <3.9",
     "description": (
         "A library for measurement and verification of energy efficiency projects."
     ),
@@ -74,11 +91,10 @@ configuration = {
     "maintainer_email": "spapadel@gmail.com",
     "license": "Apache License, Version 2.0",
     "packages": find_packages(),
+    "entry_points": {"console_scripts": [entry_point]},
     "install_requires": requires,
-    "ext_modules": [],
-    "cmdclass": {},
-    "tests_require": ["pytest"],
-    "data_files": (),
+    "include_package_data": True,
+    "package_data": {name: template_files},
     "extras_require": {"dev": dev_extras_require(), "docs": docs_extras_require()},
 }
 

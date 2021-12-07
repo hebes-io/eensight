@@ -29,8 +29,8 @@ optuna.logging.set_verbosity(optuna.logging.ERROR)
 logger = logging.getLogger("model-training")
 
 from eensight.features import ClusterFeatures
+from eensight.metrics import cvrmse
 from eensight.pipelines.daytype import metric_function
-from eensight.pipelines.validate.metrics import cvrmse
 from eensight.utils import create_groups
 
 

@@ -1,0 +1,14 @@
+include *.png
+include *.txt
+include .isort.cfg
+include LICENSE
+recursive-include src/eensight/resources/conf *.yaml
+recursive-include src/eensight/resources/data *.csv
+recursive-include docs *.bat
+recursive-include docs *.css
+recursive-include docs *.csv
+recursive-include docs *.ipynb
+recursive-include docs *.png
+recursive-include docs *.py
+recursive-include docs *.rst
+recursive-include docs Makefile

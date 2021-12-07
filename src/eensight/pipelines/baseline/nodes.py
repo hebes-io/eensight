@@ -13,8 +13,8 @@ from feature_encoders.models import GroupedPredictor
 from sklearn.pipeline import Pipeline
 
 from eensight.features import ClusterFeatures, MMCFeatures
-from eensight.models import AggregatePredictor
-from eensight.pipelines.validate.metrics import cvrmse, nmbe
+from eensight.metrics import cvrmse, nmbe
+from eensight.models._composite import AggregatePredictor
 from eensight.utils import split_training_data
 
 logger = logging.getLogger("model-selection")

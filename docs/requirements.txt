@@ -1,5 +1,5 @@
 catboost==1.0.1
-feature-encoders>=0.1.1
+feature-encoders>=0.2
 holidays>=0.11.2
 kedro==0.17.5
 marshmallow>=3.13.0

@@ -64,19 +64,16 @@ class CustomContext(KedroContext):
          Raises:
             KedroContextError: If an incorrect ``ConfigLoader`` is registered.
         """
-        feature_path = feature_encoders.settings.CONF_ROOT
-        if not os.path.isabs(feature_path):
-            feature_path = os.path.join(
-                feature_encoders.settings.PROJECT_PATH, feature_path
-            )
+        feature_path = feature_encoders.settings.CONF_PATH
+        resources_path = str(eensight.settings.RESOURCES_PATH.resolve())
 
         base_path = os.path.join(eensight.settings.CONF_ROOT, "base")
         if not os.path.isabs(base_path):
-            base_path = os.path.join(self.project_path, base_path)
+            base_path = os.path.join(resources_path, base_path)
 
         local_path = os.path.join(eensight.settings.CONF_ROOT, self.env)
         if not os.path.isabs(local_path):
-            local_path = os.path.join(self.project_path, local_path)
+            local_path = os.path.join(resources_path, local_path)
 
         conf_paths = [feature_path, base_path, local_path]
 
@@ -131,8 +128,8 @@ class CustomContext(KedroContext):
         Returns:
             DataCatalog: A populated DataCatalog instance.
         """
-        # '**/catalog*' reads modular pipeline configs
         feed_dict = self._get_feed_dict()
+
         selected_catalog = feed_dict["parameters"].pop(
             "catalog", eensight.settings.DEFAULT_CATALOG
         )
@@ -165,7 +162,8 @@ class CustomContext(KedroContext):
         # before initializing the catalog
         data_root = eensight.settings.DATA_ROOT
         if not os.path.isabs(data_root):
-            data_root = os.path.join(self.project_path, data_root)
+            resources_path = str(eensight.settings.RESOURCES_PATH.resolve())
+            data_root = os.path.join(resources_path, data_root)
 
         conf_catalog = _convert_paths_to_absolute_posix(
             project_path=Path(data_root), conf_dictionary=conf_catalog

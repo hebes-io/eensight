@@ -27,10 +27,10 @@ from sklearn.model_selection import (
 from sklearn.utils.fixes import delayed
 from sklearn.utils.validation import check_is_fitted
 
+from eensight.metrics import cvrmse, nmbe
 from eensight.utils import create_groups
 
 from ._split import RepeatedStratifiedGroupKFold
-from .metrics import cvrmse, nmbe
 
 logger = logging.getLogger("cross-validation")
 

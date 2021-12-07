@@ -4,8 +4,6 @@
 # This source code is licensed under the Apache License, Version 2.0 found in the
 # LICENSE file in the root directory of this source tree.
 
-from pathlib import Path
-
 from dynaconf.validator import ValidationError
 from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
@@ -16,10 +14,12 @@ from eensight.settings import PROJECT_PATH
 
 def load_catalog(catalog, partial_catalog=False, base_model=None, env="local"):
     """A utility function that loads the data catalog."""
-    path = Path(PROJECT_PATH)
-    bootstrap_project(path)
+    bootstrap_project(PROJECT_PATH)
 
-    extra_params = {"catalog": catalog, "partial_catalog": partial_catalog}
+    extra_params = {
+        "catalog": catalog,
+        "partial_catalog": partial_catalog,
+    }
     if base_model is not None:
         extra_params["base_model"] = base_model
 

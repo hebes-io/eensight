@@ -14,7 +14,7 @@ from feature_encoders.generate import DatetimeFeatures
 from feature_encoders.utils import as_series, get_categorical_cols
 from scipy import stats
 
-from eensight.models import BoostedTreeRegressor
+from eensight.models._gradient_boosting import BoostedTreeRegressor
 
 
 def get_resid(

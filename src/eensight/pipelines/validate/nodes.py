@@ -9,10 +9,10 @@ import logging
 import numpy as np
 import pandas as pd
 
-from eensight.models import AggregatePredictor
+from eensight.models._composite import AggregatePredictor
+from eensight.models._conformal import AggregatedCp
 from eensight.utils import split_training_data
 
-from .conformal import AggregatedCp
 from .cross_validation import CrossValidator
 
 logger = logging.getLogger("validation")

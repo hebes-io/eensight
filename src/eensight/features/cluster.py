@@ -21,9 +21,9 @@ NOISE = -1
 class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
     """Create cluster features.
 
-    A composite transformer model that uses `DBSCAN` (Density-Based Spatial Clustering
-    of Applications with Noise) to cluster the input data and a `KNeighborsClassifier`
-    to assign clusters to unseen inputs.
+    This is a composite transformer model that uses `DBSCAN` (Density-Based Spatial Clustering
+    of Applications with Noise) to cluster the input data and a `KNeighborsClassifier` to assign
+    clusters to unseen inputs.
 
     Args:
         eps (float, optional): The maximum distance between two samples for one to be
@@ -116,7 +116,7 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         dt = X.index.to_series().diff()
         time_step = dt.iloc[dt.values.nonzero()[0]].min()
 
-        if time_step < pd.Timedelta(days=1):
+        if time_step < pd.Timedelta(days=1):  # the clustering is applied on days
             X = X.groupby(lambda x: x.date).first()
             X.index = X.index.map(pd.to_datetime)
 
@@ -131,14 +131,16 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         self.year_coverage_ = len(np.unique(X.index.dayofyear)) / 365
 
         classifier = self.named_estimators["predict_clusters"]
-        without_noise = self.clusters_[self.clusters_[self.output_name] != NOISE].index
+        without_noise_idx = self.clusters_[
+            self.clusters_[self.output_name] != NOISE
+        ].index
 
-        if len(without_noise) == 0:
+        if len(without_noise_idx) == 0:
             classifier.fit(np.array(X), np.zeros(len(X)))
         else:
             classifier.fit(
-                np.array(X.loc[without_noise]),
-                np.array(self.clusters_.loc[without_noise, self.output_name]),
+                np.array(X.loc[without_noise_idx]),
+                np.array(self.clusters_.loc[without_noise_idx, self.output_name]),
             )
         self.fitted_ = True
         return self
@@ -165,6 +167,7 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
         if time_step < pd.Timedelta(days=1):
             index = X.index
             X = X.groupby(lambda x: x.date).first()
+            X.index = X.index.map(pd.to_datetime)
 
         pred = pd.DataFrame(
             data=self.named_estimators["predict_clusters"].predict(X),
@@ -174,9 +177,7 @@ class ClusterFeatures(TransformerMixin, BaseHeterogeneousEnsemble):
 
         if index is not None:
             idx_ext = recover_missing_dates(pd.DataFrame(index=index)).index
-            pred.index = pred.index.map(pd.to_datetime).map(
-                lambda x: x.replace(hour=0, minute=0, second=0)
-            )
+            pred.index = pred.index.map(lambda x: x.replace(hour=0, minute=0, second=0))
             pred = (
                 idx_ext.to_frame().join(pred).fillna(method="ffill")[[self.output_name]]
             )
