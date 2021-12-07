@@ -20,10 +20,6 @@ scipy>=1.7.1
 seaborn>=0.11.1
 stumpy>=1.9.2
 Unidecode>=1.2.0
-Sphinx >= 3.0.0
-docutils<0.18
-nbsphinx==0.8.7
-pylons-sphinx-themes >= 1.0.8
-myst-parser==0.15.2
+
 
 
