@@ -13,6 +13,7 @@ from typing import Any, Dict, Union
 from warnings import warn
 
 import feature_encoders.settings
+from environs import Env
 from kedro.config import ConfigLoader, MissingConfigException
 from kedro.framework.context import KedroContext, KedroContextError
 from kedro.framework.context.context import (
@@ -65,8 +66,9 @@ class CustomContext(KedroContext):
          Raises:
             KedroContextError: If an incorrect ``ConfigLoader`` is registered.
         """
+       
         feature_path = feature_encoders.settings.CONF_PATH
-        resources_path = str(eensight.settings.RESOURCES_PATH.resolve())
+        resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
 
         base_path = os.path.join(eensight.settings.CONF_ROOT, "base")
         if not os.path.isabs(base_path):
@@ -167,7 +169,7 @@ class CustomContext(KedroContext):
         # before initializing the catalog
         data_root = eensight.settings.DATA_ROOT
         if not os.path.isabs(data_root):
-            resources_path = str(eensight.settings.RESOURCES_PATH.resolve())
+            resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
             data_root = os.path.join(resources_path, data_root)
 
         conf_catalog = _convert_paths_to_absolute_posix(

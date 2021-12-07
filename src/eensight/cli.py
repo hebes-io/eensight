@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable, Tuple
 
 import click
+from environs import Env
 from kedro.framework.cli.utils import (
     KedroCliError,
     _reformat_load_versions,
@@ -29,7 +30,6 @@ from eensight.settings import (
     DEFAULT_BASE_MODEL,
     DEFAULT_RUN_CONFIG,
     PROJECT_PATH,
-    RESOURCES_PATH,
 )
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -167,31 +167,32 @@ def run(
     if env is None:
         env = "local"
 
-        config_loader = OmegaConfigLoader(
-            [os.path.join(RESOURCES_PATH, CONF_ROOT, "base", "run_config")]
-        )
-        run_config = config_loader.get(
-            f"{run_config}.*", f"{run_config}*/**", f"**/{run_config}.*"
-        )
+    resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
+    config_loader = OmegaConfigLoader(
+        [os.path.join(resources_path, CONF_ROOT, "base", "run_config")]
+    )
+    run_config = config_loader.get(
+        f"{run_config}.*", f"{run_config}*/**", f"**/{run_config}.*"
+    )
 
-        run_args = {
-            "base_model": base_model,
-            "pipeline": pipeline,
-            "runner": runner,
-            "from_inputs": from_inputs,
-            "to_outputs": to_outputs,
-            "from_nodes": from_nodes,
-            "to_nodes": to_nodes,
-            "tags": tags,
-            "node_names": node_names,
-            "load_versions": load_versions,
-            "extra_params": extra_params,
-        }
+    run_args = {
+        "base_model": base_model,
+        "pipeline": pipeline,
+        "runner": runner,
+        "from_inputs": from_inputs,
+        "to_outputs": to_outputs,
+        "from_nodes": from_nodes,
+        "to_nodes": to_nodes,
+        "tags": tags,
+        "node_names": node_names,
+        "load_versions": load_versions,
+        "extra_params": extra_params,
+    }
 
-        run_args = {
-            key: run_config.get(key) if not value else value
-            for key, value in run_args.items()
-        }
+    run_args = {
+        key: run_config.get(key) if not value else value
+        for key, value in run_args.items()
+    }
 
     """Run the pipeline."""
     base_model = run_args["base_model"] or DEFAULT_BASE_MODEL
