@@ -2,8 +2,10 @@ include *.png
 include *.txt
 include .isort.cfg
 include LICENSE
-recursive-include src/eensight/resources/conf *.yaml
-recursive-include src/eensight/resources/data *.csv
+recursive-include src/eensight/templates *.yaml
+recursive-include src/eensight/templates *.yml
+recursive-include src/eensight/templates *.csv
+recursive-include src/eensight/templates *.json
 recursive-include docs *.bat
 recursive-include docs *.css
 recursive-include docs *.csv
