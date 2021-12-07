@@ -6,6 +6,7 @@
 
 # Adapted from https://github.com/quantumblacklabs/kedro/blob/0.17.5/kedro/framework/context/context.py
 
+import logging.config
 import os
 from pathlib import Path
 from typing import Any, Dict, Union
@@ -90,6 +91,10 @@ class CustomContext(KedroContext):
                 f"Expected an instance of `ConfigLoader`, "
                 f"got `{type(config_loader).__name__}` instead."
             )
+
+        logging_config = config_loader.get("logging.yaml")
+        logging.config.dictConfig(logging_config)
+
         return config_loader
 
     @property

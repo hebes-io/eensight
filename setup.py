@@ -9,11 +9,11 @@ name = "eensight"
 entry_point = "eensight = eensight.__main__:main"
 
 here = Path(os.path.dirname(__file__)).resolve()
-docs = str(here.parent.joinpath("docs"))
+docs = str(here.joinpath("docs"))
 
 
 # get package version
-with open(os.path.join(str(here), name, "__init__.py"), encoding="utf-8") as f:
+with open(os.path.join(str(here), "src", name, "__init__.py"), encoding="utf-8") as f:
     result = re.search(r'__version__ = ["\']([^"\']+)', f.read())
     if not result:
         raise ValueError("Can't find the version in kedro/__init__.py")
@@ -90,7 +90,8 @@ configuration = {
     "maintainer": "Sotiris Papadelis",
     "maintainer_email": "spapadel@gmail.com",
     "license": "Apache License, Version 2.0",
-    "packages": find_packages(),
+    "packages": find_packages("src"),  # include all packages under src
+    "package_dir": {"": "src"},  # tell distutils packages are under src
     "entry_points": {"console_scripts": [entry_point]},
     "install_requires": requires,
     "include_package_data": True,
