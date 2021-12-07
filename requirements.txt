@@ -1,6 +1,7 @@
-catboost==1.0.1
+catboost>=1.0
 dynaconf<3.1.6
-feature-encoders>=0.1.2
+environs>=9.3.5
+feature-encoders>=0.2
 holidays>=0.11.2
 kedro==0.17.5
 marshmallow>=3.13.0
@@ -19,5 +20,10 @@ scipy>=1.7.1
 seaborn>=0.11.1
 stumpy>=1.9.2
 Unidecode>=1.2.0
+Sphinx >= 3.0.0
+docutils<0.18
+nbsphinx==0.8.7
+pylons-sphinx-themes >= 1.0.8
+myst-parser==0.15.2
 
 
