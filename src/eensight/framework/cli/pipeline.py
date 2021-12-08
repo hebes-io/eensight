@@ -16,7 +16,7 @@ from kedro.framework.project import pipelines
 from rich.table import Table
 
 from eensight.config import OmegaConfigLoader
-from eensight.settings import CONF_ROOT, PROJECT_PATH
+from eensight.settings import CONF_ROOT
 
 PREPROCESS_HELP = """Merges (if necessary) and validates input data, identifies potential
 data drift, identifies potential outliers, evaluates data adequacy,
@@ -82,6 +82,9 @@ def describe_pipeline(name, env):
         "compare": COMPARE_HELP,
     }
 
+    if env is None:
+        env = "local"
+        
     resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
 
     base_path = os.path.join(CONF_ROOT, "base")
