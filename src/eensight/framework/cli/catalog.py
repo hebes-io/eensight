@@ -13,6 +13,7 @@ from functools import reduce
 import click
 import rich
 import yaml
+from environs import Env
 from kedro.framework.cli.utils import KedroCliError, env_option, split_string
 from kedro.framework.project import pipelines
 from kedro.framework.session import KedroSession
@@ -162,9 +163,11 @@ def create_catalog():
     )
 
     conf_root = CONF_ROOT
+    resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
+
     base_path = os.path.join(conf_root, "base")
     if not os.path.isabs(base_path):
-        base_path = os.path.join(PROJECT_PATH, base_path)
+        base_path = os.path.join(resources_path, base_path)
 
     base_cfg = OmegaConf.load(os.path.join(base_path, "templates", "_base.yaml"))
 

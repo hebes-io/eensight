@@ -10,6 +10,7 @@ import os
 import click
 import rich
 import yaml
+from environs import Env
 from kedro.framework.cli.utils import env_option
 from kedro.framework.project import pipelines
 from rich.table import Table
@@ -81,13 +82,15 @@ def describe_pipeline(name, env):
         "compare": COMPARE_HELP,
     }
 
+    resources_path = str(Env().path("EENSIGHT_RESOURCES_PATH").resolve())
+
     base_path = os.path.join(CONF_ROOT, "base")
     if not os.path.isabs(base_path):
-        base_path = os.path.join(PROJECT_PATH, base_path)
+        base_path = os.path.join(resources_path, base_path)
 
     local_path = os.path.join(CONF_ROOT, env)
     if not os.path.isabs(local_path):
-        local_path = os.path.join(PROJECT_PATH, local_path)
+        local_path = os.path.join(resources_path, local_path)
 
     config_loader = OmegaConfigLoader([base_path, local_path])
 
