@@ -1,0 +1,412 @@
+{% if app.run_id %}
+    {% set base_uri = app.store_uri + "/" + app.site_id  + "/tracked/" + app.run_id %}
+{% else %}
+    {% set base_uri = app.store_uri + "/" + app.site_id + "/untracked" %}
+{% endif %}
+
+
+# artifacts without a namespace
+
+model:
+    type: {{ globals.types.pickle }}
+    filepath: {{ base_uri }}/{{ globals.folders.models }}/train/model.pickle
+
+model-autoenc:
+    type: {{ globals.types.pickle }}
+    filepath: {{ base_uri }}/{{ globals.folders.models }}/train/decoder.pickle
+
+
+# artifacts within a namespace
+
+{% if app.namespace == "train" %}
+
+train.input-features:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+    path: {{ app.input_uri }}/train/features
+    {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/train/features
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.features.format] }}
+        load_args: 
+        {% for key, val in app.features.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+
+train.input-labels:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+    path: {{ app.input_uri }}/train/labels
+    {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/train/labels
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.labels.format] }}
+        load_args: 
+        {% for key, val in app.labels.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+        
+train.validated-features:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.intermediate }}/train/features/validated.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.validated-labels:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.intermediate }}/train/labels/validated.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.preprocessed-features:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/train/features/preprocessed.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.preprocessed-labels:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/train/labels/preprocessed.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.adequacy-summary:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.reports }}/train/adequacy.csv
+    save_args:
+        index: true
+
+train.prediction:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/train/prediction.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.prediction-autoenc:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/train/prediction_autoenc.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.activity:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/train/activity.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+train.performance:
+    type: {{ globals.types.json }}
+    filepath: {{ base_uri }}/{{ globals.folders.reports }}/train/performance.json
+    versioned: false
+
+train.performance-autoenc:
+    type: {{ globals.types.json }}
+    filepath: {{ base_uri }}/{{ globals.folders.reports }}/train/performance_autoenc.json
+    versioned: false
+
+
+{% endif %}
+
+
+{% if app.namespace == "test" %}
+
+test.input-features:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+    path: {{ app.input_uri }}/test/features
+    {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/test/features
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.features.format] }}
+        load_args:
+        {% for key, val in app.features.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+
+test.input-labels:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+    path: {{ app.input_uri }}/test/labels
+    {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/test/labels
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.labels.format] }}
+        load_args:
+        {% for key, val in app.labels.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+
+test.preprocessed-features:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/test/features/preprocessed.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+test.preprocessed-labels:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/test/labels/preprocessed.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+test.prediction:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/test/prediction.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+test.prediction-autoenc:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/test/prediction_autoenc.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+test.activity:
+    type: {{ globals.types.csv }}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/test/activity.csv
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+test.performance:
+    type: {{ globals.types.json }}
+    filepath: {{ base_uri }}/{{ globals.folders.reports }}/test/performance.json
+
+test.performance-autoenc:
+    type: {{ globals.types.json }}
+    filepath: {{ base_uri }}/{{ globals.folders.reports }}/test/performance_autoenc.json
+
+
+{% endif %}
+
+
+{% if app.namespace == "apply" %}
+
+apply.input-features:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+        {% if app.batch %}
+    path: {{ app.input_uri }}/apply/{{ app.batch }}/features
+        {% else %}
+    path: {{ app.input_uri }}/apply/features
+        {% endif %}
+    {% else %}
+        {% if app.batch %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/apply/{{ app.batch }}/features
+        {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/apply/features
+        {% endif %}
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.features.format] }}
+        load_args:
+        {% for key, val in app.features.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+
+apply.input-labels:
+    type: {{ globals.types.multiple }}
+    {% if app.input_uri %}
+        {% if app.batch %}
+    path: {{ app.input_uri }}/apply/{{ app.batch }}/labels
+        {% else %}
+    path: {{ app.input_uri }}/apply/labels
+        {% endif %}
+    {% else %}
+        {% if app.batch %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/apply/{{ app.batch }}/labels
+        {% else %}
+    path: {{ app.store_uri }}/{{ app.site_id }}/{{ globals.folders.raw }}/apply/labels
+        {% endif %}
+    {% endif %}
+    dataset:
+        type: {{ globals.types[app.labels.format] }}
+        load_args:
+        {% for key, val in app.labels.load_args.items() %}
+            {{ key }}: {{ val }}
+        {% endfor %}
+
+apply.preprocessed-features:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/apply/{{ app.batch }}/features/preprocessed.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/apply/features/preprocessed.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.preprocessed-labels:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/apply/{{ app.batch }}/labels/preprocessed.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_inputs }}/apply/labels/preprocessed.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.prediction:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/{{ app.batch }}/prediction.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/prediction.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.prediction-autoenc:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/{{ app.batch }}/prediction_autoenc.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/prediction_autoenc.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.activity:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/apply/{{ app.batch }}/activity.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/apply/activity.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.activity-adjusted:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/apply/{{ app.batch }}/activity_adjusted.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.features }}/apply/activity_adjusted.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.impact:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/{{ app.batch }}/impact.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/impact.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+apply.impact-autoenc:
+    type: {{ globals.types.csv }}
+    {% if app.batch %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/{{ app.batch }}/impact_autoenc.csv
+    {% else %}
+    filepath: {{ base_uri }}/{{ globals.folders.model_outputs }}/apply/impact_autoenc.csv
+    {% endif %}
+    load_args:
+        sep: ','
+        index_col: 0
+        parse_dates: 
+            - 0
+    save_args:
+        index: true
+
+
+{% endif %}

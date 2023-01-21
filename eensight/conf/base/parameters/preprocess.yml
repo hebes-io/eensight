@@ -1,0 +1,31 @@
+rebind_names:
+  consumption: null
+  temperature: null
+  timestamp: null
+
+date_format: "%Y-%m-%d %H:%M:%S"
+
+adequacy:
+  max_missing_pct: 0.1
+
+validation:
+  threshold: 0.25
+  
+alignment:
+  mode:
+    temperature: value
+  tolerance:
+    temperature: 180 # always in minutes
+  cumulative:
+    temperature: false 
+    consumption: true
+
+filter:
+  min_value: null
+  max_value: null
+  allow_zero: true
+  allow_negative: false
+  
+
+
+

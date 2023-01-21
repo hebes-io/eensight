@@ -1,0 +1,16 @@
+
+types:
+  csv: pandas.CSVDataSet
+  parquet: pandas.ParquetDataSet
+  json: json.JSONDataSet
+  multiple: PartitionedDataSet
+  pickle: pickle.PickleDataSet
+
+folders:
+  raw: 01_raw
+  intermediate: 02_intermediate
+  features: 03_features
+  model_inputs: 04_model_inputs
+  models: 05_models
+  model_outputs: 06_model_outputs
+  reports: 07_reports
