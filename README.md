@@ -1,7 +1,7 @@
 ![logo](https://github.com/hebes-io/eensight/blob/master/logo.png)
 <br/><br/>
 
-# The `eensight` tool for measurement and verification of energy efficiency improvements
+## The `eensight` tool for measurement and verification of energy efficiency improvements
 
 The `eensight` Python package implements the measurement and verification (M&V) methodology that has been developed by the H2020 project [SENSEI - Smart Energy Services to Improve the Energy Efficiency of the European Building Stock](https://senseih2020.eu/). 
 
