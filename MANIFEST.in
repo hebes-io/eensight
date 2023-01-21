@@ -1,0 +1,6 @@
+include *.png
+include *.txt
+recursive-include eensight *.gitkeep
+recursive-include eensight *.md
+recursive-include eensight *.toml
+recursive-include eensight *.yml
