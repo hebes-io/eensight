@@ -1,122 +1,71 @@
-# eensight
+![logo](https://github.com/hebes-io/eensight/blob/master/logo.png)
+<br/><br/>
 
-## Overview
+# The `eensight` tool for measurement and verification of energy efficiency improvements
 
-This is your new Kedro project, which was generated using `Kedro 0.18.4`.
+The `eensight` Python package implements the measurement and verification (M&V) methodology that has been developed by the H2020 project [SENSEI - Smart Energy Services to Improve the Energy Efficiency of the European Building Stock](https://senseih2020.eu/). 
 
-Take a look at the [Kedro documentation](https://kedro.readthedocs.io) to get started.
+The online book *Rethinking Measurement and Verification of Energy Savings* (accessible [here](https://hebes-io.github.io/rethinking/index.html)) explains in detail both the methodology and its implementation.
 
-## Rules and guidelines
+## Installation
 
-In order to get the best out of the template:
+`eensight` can be installed by pip:
 
-* Don't remove any lines from the `.gitignore` file we provide
-* Make sure your results can be reproduced by following a [data engineering convention](https://kedro.readthedocs.io/en/stable/faq/faq.html#what-is-data-engineering-convention)
-* Don't commit data to your repository
-* Don't commit any credentials or your local configuration to your repository. Keep all your credentials and local configuration in `conf/local/`
-
-## How to install dependencies
-
-Declare any dependencies in `src/requirements.txt` for `pip` installation and `src/environment.yml` for `conda` installation.
-
-To install them, run:
-
-```
-pip install -r src/requirements.txt
+```bash
+pip install eensight
 ```
 
-## How to run your Kedro pipeline
+## Usage
 
-You can run your Kedro project with:
+### 1. Through the command line
 
+All the functionality in `eensight` is organized around data pipelines. Each pipeline consumes data and other artifacts (such as models) produced by a previous pipeline, and produces new data and artifacts for its successor pipelines.
+
+There are four (4) pipelines in `eensight`. The names of the pipelines and the associations between pipelines and namespaces are summarized below:
+
+|            	| train    	| test   	| apply   |
+|------------	|----------	|----------	|---------|
+| preprocess 	| &#10004; 	| &#10004; 	| &#10004;|
+| predict    	| &#10004; 	| &#10004;	| &#10004;|
+| evaluate    	|          	| &#10004;  | &#10004;|
+| adjust    	|          	|           | &#10004;|
+
+The primary way of using `eensight` is through the command line. The first argument is always the name of the pipeline to run, such as:
+
+```bash
+eensight run predict --namespace train
 ```
-kedro run
+The command
+
+```bash
+eensight run --help
 ```
+prints the documentation for all the options that can be passed to the command line.
 
-## How to test your Kedro project
+### 2. As a library
 
-Have a look at the file `src/tests/test_run.py` for instructions on how to write your tests. You can run your tests as follows:
+The pipelines of `eensight` are separate from the methods that implement them, so that the latter can be used directly:
 
-```
-kedro test
-```
+```python
+import pandas as pd
 
-To configure the coverage threshold, go to the `.coveragerc` file.
+from eensight.methods.prediction.baseline import UsagePredictor
+from eensight.methods.prediction.activity import estimate_activity
 
-## Project dependencies
+non_occ_features = ["temperature", "dew point temperature"]
 
-To generate or update the dependency requirements for your project:
+activity = estimate_activity(
+    X, 
+    y, 
+    non_occ_features=non_occ_features, 
+    exog="temperature",
+    assume_hurdle=False,
 
-```
-kedro build-reqs
-```
+)
 
-This will `pip-compile` the contents of `src/requirements.txt` into a new file `src/requirements.lock`. You can see the output of the resolution by opening `src/requirements.lock`.
-
-After this, if you'd like to update your project requirements, please update `src/requirements.txt` and re-run `kedro build-reqs`.
-
-[Further information about project dependencies](https://kedro.readthedocs.io/en/stable/kedro_project_setup/dependencies.html#project-specific-dependencies)
-
-## How to work with Kedro and notebooks
-
-> Note: Using `kedro jupyter` or `kedro ipython` to run your notebook provides these variables in scope: `context`, `catalog`, and `startup_error`.
->
-> Jupyter, JupyterLab, and IPython are already included in the project requirements by default, so once you have run `pip install -r src/requirements.txt` you will not need to take any extra steps before you use them.
-
-### Jupyter
-To use Jupyter notebooks in your Kedro project, you need to install Jupyter:
-
-```
-pip install jupyter
-```
-
-After installing Jupyter, you can start a local notebook server:
-
-```
-kedro jupyter notebook
-```
-
-### JupyterLab
-To use JupyterLab, you need to install it:
-
-```
-pip install jupyterlab
+X_act = pd.concat([X, activity.to_frame("activity")], axis=1)
+model = UsagePredictor(skip_calendar=True).fit(X_act, y)
 ```
 
-You can also start JupyterLab:
-
-```
-kedro jupyter lab
-```
-
-### IPython
-And if you want to run an IPython session:
-
-```
-kedro ipython
-```
-
-### How to convert notebook cells to nodes in a Kedro project
-You can move notebook code over into a Kedro project structure using a mixture of [cell tagging](https://jupyter-notebook.readthedocs.io/en/stable/changelog.html#release-5-0-0) and Kedro CLI commands.
-
-By adding the `node` tag to a cell and running the command below, the cell's source code will be copied over to a Python file within `src/<package_name>/nodes/`:
-
-```
-kedro jupyter convert <filepath_to_my_notebook>
-```
-> *Note:* The name of the Python file matches the name of the original notebook.
-
-Alternatively, you may want to transform all your notebooks in one go. Run the following command to convert all notebook files found in the project root directory and under any of its sub-folders:
-
-```
-kedro jupyter convert --all
-```
-
-### How to ignore notebook output cells in `git`
-To automatically strip out all output cell contents before committing to `git`, you can run `kedro activate-nbstripout`. This will add a hook in `.git/config` which will run `nbstripout` before anything is committed to `git`.
-
-> *Note:* Your output cells will be retained locally.
-
-## Package your Kedro project
-
-[Further information about building project documentation and packaging your project](https://kedro.readthedocs.io/en/stable/tutorial/package_a_project.html)
+<br>
+<img align="left" width="500" src="https://github.com/hebes-io/eensight/blob/master/EC_support.png">
